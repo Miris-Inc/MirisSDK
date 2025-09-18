@@ -17,7 +17,7 @@
 
 	Paste the following and hit install
 
-	`https://github.com/Miris-Inc/UnitySDKgit#v0.1.0`
+	`https://github.com/Miris-Inc/UnitySDK.git#v0.1.1`
 
 
 4. Settings changes
