@@ -1,0 +1,79 @@
+#pragma kernel ConvertBufferMain
+
+Texture2D<float> _sourceBuffer;
+RWStructuredBuffer<float> _destBuffer;
+
+uint _AllocationLength;
+uint _AllocationOffset;
+uint _SrcMosaicStride;
+uint _SrcMosaicOffset;
+uint _SrcMosaicTileWidth;
+uint _SrcMosaicTileHeight;
+uint _SrcMosaicTileX;
+uint _SrcMosaicTileY;
+uint _SrcMosaicInterleaveType;
+uint _SrcMosaicTextureWidth;
+uint _SrcMosaicTextureHeight;
+float _SrcMosaicMin;
+float _SrcMosaicMax;
+uint _srcNumSplats;
+uint _SrcIsSHColor;
+
+float convertSH0ToColor(float dc0)
+{
+    float kSH_C0 = 0.2820948f;
+    return dc0 * kSH_C0 + 0.5f;
+}
+
+void unpack(int readLocation)
+{
+    const uint xmin = _SrcMosaicTileX * _SrcMosaicTileWidth;
+    const uint ymin = _SrcMosaicTileY * _SrcMosaicTileHeight;
+
+    uint y = readLocation / _SrcMosaicTileWidth;
+    uint x = readLocation - y * _SrcMosaicTileWidth;
+
+    y += ymin;
+    x += xmin;
+    
+    float dataPoint = _sourceBuffer.Load(int3(x, y, 0));
+    const float range = _SrcMosaicMax - _SrcMosaicMin;
+    float valueDecoded = 0;
+    
+    float valueForCombining = 0.0f;
+    if (_SrcMosaicInterleaveType == 0)
+    {
+        _destBuffer[_AllocationOffset + readLocation * _SrcMosaicStride + _SrcMosaicOffset] = 0;
+        valueDecoded = dataPoint;
+    }
+    else if(_SrcMosaicInterleaveType == 1)
+    {
+        // on CPU side order of draw calls will be first high bits then low bits
+        valueForCombining = _destBuffer[_AllocationOffset + readLocation * _SrcMosaicStride + _SrcMosaicOffset];
+        uint highBits = uint(valueForCombining * 255) & 0xff;
+        uint lowBits = uint(dataPoint * 255) & 0xff;
+        uint combinedBits = (highBits << 8) | lowBits;
+        valueDecoded = combinedBits / 65535.0f;
+        valueDecoded = valueDecoded * range + _SrcMosaicMin;
+    }
+    else
+    {
+        valueDecoded = dataPoint * range + _SrcMosaicMin;
+    }
+    
+    if (_SrcIsSHColor != 0)
+    {
+        valueDecoded = convertSH0ToColor(valueDecoded);
+    }
+    
+    _destBuffer[_AllocationOffset + readLocation * _SrcMosaicStride + _SrcMosaicOffset] = valueDecoded;
+}
+
+[numthreads(1024,1,1)]
+void ConvertBufferMain (uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _srcNumSplats)
+    {
+        unpack(id.x);
+    }
+}
