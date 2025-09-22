@@ -6,7 +6,7 @@
 
 2. Temporarily, since we are using a private repo for this package, you will need to download and set up the [Git Credential Manager](https://docs.unity3d.com/6000.2/Documentation/Manual/upm-config-https-git.html). 
 	* Once installed, go to the unity project repo you want to have this package in and run `git config --global credential.helper manager`
-	* Followed by `git ls-remote --heads https://github.com/Miris-Inc/UnitySDK HEAD`
+	* Followed by `git ls-remote --heads https://github.com/Miris-Inc/MirisSDK HEAD`
 
 
 3. Open a Unity Project and use the Package Manager to install the Miris SDK. 
@@ -17,7 +17,7 @@
 
 	Paste the following and hit install
 
-	`https://github.com/Miris-Inc/UnitySDK.git#v0.1.1`
+	`https://github.com/Miris-Inc/MirisSDK.git?path=Unity#v0.1.2`
 
 
 4. Settings changes
@@ -37,5 +37,4 @@ If your project is on URP, you will need to add the Gaussian Splat Render Pass.
 ### Notes: 
 * **Currently investigating solutions to issues running aqua-dlls/libs built on another machine. The first versions of this SDK might not run properly on your machine due to this and potential OS security blockings.**
 * This sdk has not been fully tested and is being posted mostly for format purposes in this version. 
-* v0.1.1 is missing Windows support.
 
