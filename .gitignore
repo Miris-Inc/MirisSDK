@@ -1,5 +1,5 @@
 # OSX folder attributes 
-.DS_Store
+**/.DS_Store
 
 # To allow for empty folders in Unity packages/projects
 !.do_not_delete
