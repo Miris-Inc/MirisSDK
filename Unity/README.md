@@ -17,7 +17,7 @@
 
 	Paste the following and hit install
 
-	`https://github.com/Miris-Inc/MirisSDK.git?path=Unity#v0.1.2`
+	`https://github.com/Miris-Inc/MirisSDK.git?path=Unity#v0.1.3`
 
 
 4. Settings changes
