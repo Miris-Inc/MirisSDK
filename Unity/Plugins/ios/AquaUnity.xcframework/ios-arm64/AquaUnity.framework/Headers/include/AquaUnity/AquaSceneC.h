@@ -8,6 +8,7 @@
 #include <AquaClient/NativeArray.h>
 #include <AquaClient/ServerEnvironment.h>
 #include <AquaFoundation/AquaObject.h>
+#include <AquaFoundation/LogLevel.h>
 #include <AquaScene/AssetMetadata.h>
 #include <AquaScene/AttributeInfo.h>
 #include <AquaScene/SceneChangeIds.h>
@@ -27,6 +28,8 @@ int LibAquaIsDebug();
 
 AquaClientHandle CreateClient();
 void DestroyClient(AquaClientHandle client);
+
+bool SetPersistentDataDirectory(AquaClientHandle client, const char* dirPath);
 
 // ---------------------------------------------------------------
 // Asset Management API
@@ -100,6 +103,10 @@ bool RemoveStream(AquaClientHandle client, int streamObjectId);
 /// Set a Unity camera's local-to-world matrix onto our Aqua scene's main camera -- this information
 /// is used by the scene operators to progressively refine the renderable LODs.
 void SetMainCameraTransform(AquaClientHandle client, float* cameraTransform);
+
+/// Set a Unity camera's view frustum onto our Aqua scene's main camera.
+void SetMainCameraViewFrustum(AquaClientHandle client, float aspectRatio, float verticalFov, float nearPlane,
+                              float farPlane);
 
 /// Set the current height/y offset of the floor of the xr scene from Unity
 void SetXRFloorHeight(AquaClientHandle client, float height);
