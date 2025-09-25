@@ -66,7 +66,7 @@ namespace Aqua.Runtime
     /// See $AQUA_ROOT/modules/AquaUnity/include/AquaUnity/AquaSceneC.h
     /// for the corresponding C API.
     /// </summary>
-    public class AquaUnityApi
+    public class AquaUnityApi : IDisposable
     {
         public const string AquaUnityPath =
 #if UNITY_IOS && !UNITY_EDITOR
@@ -126,24 +126,34 @@ namespace Aqua.Runtime
         {
             Application.quitting += Destroy;
 
-            s_instance = new AquaUnityApi(CreateClient());
+            s_instance = new AquaUnityApi();
         }
 
         static private void Destroy()
         {
+            s_instance.Dispose();
             s_instance = null;
         }
 
-        private readonly AquaClientHandle m_client;
+        private AquaClientHandle m_client = System.IntPtr.Zero;
 
-        private AquaUnityApi(AquaClientHandle client)
+        private AquaUnityApi()
         {
-            m_client = client;
+            m_client = CreateClient();
+        }
+
+        public void Dispose()
+        {
+            if (m_client != System.IntPtr.Zero)
+            {
+                DestroyClient(m_client);
+                m_client = System.IntPtr.Zero;
+            }
         }
 
         ~AquaUnityApi()
         {
-            DestroyClient(m_client);
+            Dispose();
         }
 
         [DllImport(AquaUnityPath)]
@@ -154,6 +164,9 @@ namespace Aqua.Runtime
 
         [DllImport(AquaUnityPath)]
         static private extern void SetUsdPath(AquaClientHandle client, string payload);
+
+        [DllImport(AquaUnityPath)]
+        static private extern bool SetPersistentDataDirectory(AquaClientHandle client, string dirPath);
 
         [DllImport(AquaUnityPath)]
         static private extern void PerformThroughputTest(AquaClientHandle client, string payload, string deviceId);
@@ -227,6 +240,9 @@ namespace Aqua.Runtime
 
         [DllImport(AquaUnityPath)]
         static private extern void SetMainCameraTransform(AquaClientHandle client, float[] transform);
+
+        [DllImport(AquaUnityPath)]
+        static private extern void SetMainCameraViewFrustum(AquaClientHandle client, float aspectRatio, float verticalFov, float nearPlane, float farPlane);
 
         [DllImport(AquaUnityPath)]
         static private extern void SetSceneObjectTransform(AquaClientHandle client, int sceneObjectId, float[] transform);
@@ -353,6 +369,16 @@ namespace Aqua.Runtime
         }
 
         /// <summary>
+        /// Gives the SDK a path to a directory to which it can write persistent data.
+        /// </summary>
+        /// <param name="dirPath">Path to a writable directory</param>
+        /// <returns>true if the directory was deemed as writable, false otherwise</returns>
+        static public bool SetPersistentDataDirectory(string dirPath)
+        {
+            return SetPersistentDataDirectory(s_instance.m_client, dirPath);
+        }
+
+        /// <summary>
         /// Runs a throughput test. For Miris internal use.
         /// </summary>
         /// <param name="payload">A JSON object, for configuring the test</param>
@@ -468,6 +494,11 @@ namespace Aqua.Runtime
         static public void SetMainCameraTransform(float[] transform)
         {
             SetMainCameraTransform(s_instance.m_client, transform);
+        }
+
+        static public void SetMainCameraViewFrustum(float aspectRatio, float verticalFov, float nearPlane, float farPlane)
+        {
+            SetMainCameraViewFrustum(s_instance.m_client, aspectRatio, verticalFov, nearPlane, farPlane);
         }
 
         static public void SetSceneObjectTransform(int sceneObjectId, float[] transform)
@@ -855,6 +886,11 @@ namespace Aqua.Runtime
         {
             float[] matrixArray = ValueConversion.MatrixToFloatArray(cameraTransform);
             AquaUnityApi.SetMainCameraTransform(matrixArray);
+        }
+
+        public void SetMainCameraViewFrustum(Camera camera)
+        {
+            AquaUnityApi.SetMainCameraViewFrustum(camera.aspect, camera.fieldOfView, camera.nearClipPlane, camera.farClipPlane);
         }
 
         public void SetXRFloorHeight(float xrFloorHeight)

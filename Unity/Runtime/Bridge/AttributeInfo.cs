@@ -33,6 +33,7 @@ namespace Aqua.Runtime
         public int m_textureWidth;
         public int m_textureHeight;
         public void* m_externalNativeHandle;
+        public int m_isRangeNormalized;
     };
 
     // For transporting an AttributeArray (in C++) over to AttributeBuffer (C#) 

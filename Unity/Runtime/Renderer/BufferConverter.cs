@@ -38,6 +38,7 @@ namespace Aqua.Runtime
         private static readonly int SrcMosaicMin = Shader.PropertyToID("_SrcMosaicMin");
         private static readonly int SrcMosaicMax = Shader.PropertyToID("_SrcMosaicMax");
         private static readonly int isSHColor = Shader.PropertyToID("_SrcIsSHColor");
+        private static readonly int isRangeNormalized = Shader.PropertyToID("_IsRangeNormalized");
 
         public static readonly ProfilerMarker s_ConvertBufferMarker = new ProfilerMarker("ConvertBuffers");
         public MosaicTextureToAtlasBufferConverter()
@@ -109,6 +110,7 @@ namespace Aqua.Runtime
                 commandBuffer.SetComputeFloatParam(m_DecodeMosaicTextureToAtlasBufferShader, SrcMosaicMin, command.srcMosaic.m_min);
                 commandBuffer.SetComputeFloatParam(m_DecodeMosaicTextureToAtlasBufferShader, SrcMosaicMax, command.srcMosaic.m_max);
                 commandBuffer.SetComputeIntParam(m_DecodeMosaicTextureToAtlasBufferShader, isSHColor, command.srcMosaic.m_isShColor);
+                commandBuffer.SetComputeIntParam(m_DecodeMosaicTextureToAtlasBufferShader, isRangeNormalized, command.srcMosaic.m_isRangeNormalized);
 
 
                 var (threadGroupCountX, _, _) = ComputeKernelUtils.CalculateThreadGroupCount(

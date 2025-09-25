@@ -53,7 +53,6 @@ namespace Aqua.Runtime
         , m_verticalOffset(0.0f)
         , m_spawnBehavior(AssetSpawnBehavior::Absolute)
         {
-            std::memset(m_vrEnvironment, 0, sizeof(m_vrEnvironment));
             std::memset(m_version, 0, sizeof(m_version));
         }
         void reset(){
@@ -62,20 +61,10 @@ namespace Aqua.Runtime
             m_lodMaxDistance = 20.0f;
             m_verticalOffset = 0.0f;
             m_spawnBehavior = AssetSpawnBehavior::CameraOriented;
-            std::memset(m_vrEnvironment, 0, sizeof(m_vrEnvironment));
             std::memset(m_version, 0, sizeof(m_version));
         }
 
 #endif
-
-#if USING_CSHARP
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
-        public string m_vrEnvironment;
-
-#else
-        char m_vrEnvironment[256];
-#endif
-
 
 #if USING_CSHARP
 
