@@ -111,13 +111,26 @@ namespace Aqua.Runtime
                     Assert.IsTrue(mosaicDescriptorInfo.m_externalNativeHandle != null, "MosaicDescriptorInfo must have a valid external native handle.");
                     Assert.IsTrue(mosaicDescriptorInfo.m_interleaveType >= 0, "MosaicDescriptorInfo must have a valid interleave type.");
              
-                    m_externalTextures[i] = Texture2D.CreateExternalTexture(
-                        mosaicDescriptorInfo.m_textureHeight,
-                        mosaicDescriptorInfo.m_textureWidth,
-                        TextureFormat.R8, 
-                        false, 
-                        true, 
-                        (IntPtr)mosaicDescriptorInfo.m_externalNativeHandle);
+
+                    if(mosaicDescriptorInfo.m_isRangeNormalized == 0)
+                    {
+                        m_externalTextures[i] = Texture2D.CreateExternalTexture(
+                            mosaicDescriptorInfo.m_textureHeight,
+                            mosaicDescriptorInfo.m_textureWidth,
+                            TextureFormat.RFloat,
+                            false,
+                            true,
+                            (IntPtr)mosaicDescriptorInfo.m_externalNativeHandle);
+                    }
+                    else { 
+                        m_externalTextures[i] = Texture2D.CreateExternalTexture(
+                            mosaicDescriptorInfo.m_textureHeight,
+                            mosaicDescriptorInfo.m_textureWidth,
+                            TextureFormat.R8,
+                            false,
+                            true,
+                            (IntPtr)mosaicDescriptorInfo.m_externalNativeHandle);
+                    }
                 }
 
                 m_elementCount = elementCount;

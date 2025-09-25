@@ -65,7 +65,6 @@ namespace Aqua.Runtime
             m_lodMaxDistance = 20.0f,
             m_verticalOffset = 0.0f,
             m_spawnBehavior = AssetSpawnBehavior.CameraOriented,
-            m_vrEnvironment = ""
         };
 
         [SerializeField]
@@ -125,7 +124,6 @@ namespace Aqua.Runtime
         private AquaClientConfig m_clientConfig;
 
         private XRUtils m_xrUtils = new XRUtils();
-        public XREnvironmentHandler m_xrEnvironmentHandler;
 
         private Dictionary<SceneObjectType, BaseObjectAdapter> m_adapters;
         public bool fadeLargeSplats
@@ -250,11 +248,6 @@ namespace Aqua.Runtime
                 AquaUnityApi.SetAssetViewerKey(m_clientConfig.asset_viewer_key);
             }
             m_adapters = SceneObjectAdapterRegistry.s_instance.CreateAdapters();
-
-            if (m_xrEnvironmentHandler == null)
-            {
-                m_xrEnvironmentHandler = gameObject.AddComponent<XREnvironmentHandler>();
-            }
         }
 
         // --------------------------------------------------------------------
@@ -291,7 +284,6 @@ namespace Aqua.Runtime
             // Update XR State 
             // TODO: This is Miris Player specific behavior and shoulud be re-factored as such.
             m_scene.SetXRFloorHeight(m_xrUtils.GetXRFloorHeight(m_cameraOffset));
-            m_xrEnvironmentHandler.SetSpawnYaw(Camera.main.transform.eulerAngles.y);
 
             AquaSceneObject streamObject = m_scene.AddStream(stream.name, url);
 
@@ -352,7 +344,6 @@ namespace Aqua.Runtime
         {
             // layer in structure file scene metadata values
             m_scene.GetMetadata(out m_sceneMetadata);
-            m_xrEnvironmentHandler.CheckUpdate(m_sceneMetadata.m_vrEnvironment);
             m_lodRefinementParameters.m_lodMaxDistance = m_sceneMetadata.m_lodMaxDistance;
             m_lodRefinementParameters.m_highestLodLimit = m_sceneMetadata.m_highestLodLimit;
             m_lodRefinementParameters.m_lowestLodLimit = m_sceneMetadata.m_lowestLodLimit;
@@ -608,11 +599,6 @@ namespace Aqua.Runtime
 
         protected void OnDisable()
         {
-            if (m_xrEnvironmentHandler != null)
-            {
-                m_xrEnvironmentHandler.Destroy();
-            }
-
             MirisStream[] streams = m_streamToSceneObjectId.Keys.ToArray();
             foreach (MirisStream stream in streams)
             {
@@ -628,9 +614,7 @@ namespace Aqua.Runtime
         {
             // Initialize client & scene state
             m_scene.SetMainCameraTransform(Camera.main.transform.localToWorldMatrix);
-
-            // Initialize scene adapters
-            m_xrEnvironmentHandler.Init();
+            m_scene.SetMainCameraViewFrustum(Camera.main);
         }
 
         protected void Update()
@@ -642,7 +626,6 @@ namespace Aqua.Runtime
         {
             SyncClientParameters();
             SyncScene();
-            m_xrEnvironmentHandler?.SetFadeDuration(m_sceneTransitionFadeDuration);
         }
     }
 }

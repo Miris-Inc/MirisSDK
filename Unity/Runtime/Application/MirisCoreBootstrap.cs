@@ -15,7 +15,19 @@ namespace Aqua.Runtime
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         static void OnBeforeSceneLoad()
         {
+            PreparePersistentDataDir();
             PreloadData();
+        }
+
+        static void PreparePersistentDataDir()
+        {
+            string dirPath = Path.Combine(Application.persistentDataPath, "miris");
+            if (!Directory.Exists(dirPath))
+            {
+                Directory.CreateDirectory(dirPath);
+            }
+
+            AquaUnityApi.SetPersistentDataDirectory(dirPath);
         }
 
         static async Task PreloadData() {

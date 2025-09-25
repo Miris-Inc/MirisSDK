@@ -68,6 +68,15 @@ namespace Aqua.Runtime
         }
 
         /// <summary>
+        /// Reloads the current content URL. If this script is enabled, on the 
+        /// next Update loop, the current content will be re-loaded
+        /// </summary>
+        public void Reload()
+        {
+            m_loadedUrl = "";
+        }
+
+        /// <summary>
         /// Validates whether the underlying AquaSceneObject is properly initialized
         /// </summary>
         /// <returns>True if the underlying m_sceneObject is non-null, false otherwise</returns>
