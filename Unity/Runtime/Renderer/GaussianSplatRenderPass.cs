@@ -46,16 +46,11 @@ namespace Aqua.Runtime
 
                 cameraData.camera.allowHDR = false;
 
-                RenderTextureDescriptor rtDesc = cameraData.cameraTargetDescriptor;
-
+                RenderTextureDescriptor rtDesc =XRSettings.enabled ? XRSettings.eyeTextureDesc:cameraData.cameraTargetDescriptor;
+                
                 rtDesc.depthBufferBits = 0;
                 rtDesc.msaaSamples = 1;
                 rtDesc.graphicsFormat = GraphicsFormat.R8G8B8A8_UNorm;
-
-                if (m_xrUtils.IsStereo()) {
-                    rtDesc.dimension = TextureDimension.Tex2DArray;
-                    rtDesc.volumeDepth = 2;
-                }
 
                 TextureHandle gaussianSplatTexture = UniversalRenderer.CreateRenderGraphTexture(renderGraph, rtDesc, m_gaussianSplatRTName, true);
 
@@ -75,7 +70,12 @@ namespace Aqua.Runtime
 
             static void ExecutePass(PassData data, UnsafeGraphContext context) {                
                 var commandBuffer = CommandBufferHelpers.GetNativeCommandBuffer(context.cmd);
-                                    
+
+                // store the current multipass id
+                if (m_xrUtils.IsMultiPassXR()) {
+                    XRFrameInfo.m_multipassId = data.m_cameraData.xr.multipassId;
+                }
+
                 using var _ = new ProfilingScope(commandBuffer, s_profilingSampler);
                 commandBuffer.SetGlobalTexture(s_gaussianSplatRT, data.m_gaussianSplatRT);
                 
@@ -93,7 +93,7 @@ namespace Aqua.Runtime
                 }
                 else 
                 {
-                    CoreUtils.SetRenderTarget(commandBuffer, data.m_sourceTexture, data.m_sourceDepth);
+                    CoreUtils.SetRenderTarget(commandBuffer, data.m_sourceTexture);
                 }
                 
                 Material matComposite = GaussianSplatRenderSystem.m_instance.m_compositeMaterial;

@@ -34,9 +34,6 @@ namespace Aqua.Runtime
         public bool m_useDropFiles = true;
 
         [SerializeField]
-        public bool m_useUsdFiles = false;
-
-        [SerializeField]
         public bool m_enableSkybox = true;
 
         [SerializeField]
@@ -161,12 +158,17 @@ namespace Aqua.Runtime
         // Get the fully resolved & addressable scene path after variable expansion.
         public string ResolveUrl(string unresolvedUrl)
         {
+            #if !MIRIS_INTERNAL
+            // For external builds, do not perform any variable expansion.
+            return unresolvedUrl;
+            #else
             var replacements = new Dictionary<string, string>
             {
                 {"devlocalhost", m_clientConfig.devlocalhost},
                 {"devlocalhost_fqdn", m_clientConfig.devlocalhost_fqdn},
             };
             return StringUtils.ExpandVars(unresolvedUrl, replacements);
+            #endif
         }
 
         // Get the version of the currently loaded asset
@@ -339,7 +341,6 @@ namespace Aqua.Runtime
         // --------------------------------------------------------------------
         // Unity scene management
         // --------------------------------------------------------------------
-
         private void GetSceneMetadata()
         {
             // layer in structure file scene metadata values

@@ -27,6 +27,7 @@ namespace Aqua.Runtime
         public int m_interleaveType;
         public int m_offset;
         public int m_stride;
+        public int m_eccPart;
         public float m_min;
         public float m_max;
         public int m_isShColor;

@@ -9,6 +9,7 @@ using UnityEngine.TestTools.Graphics;
 
 using Aqua.Runtime;
 using NUnit.Framework;
+using UnityEngine.Rendering;
 
 namespace Aqua.Tests
 {
@@ -227,6 +228,17 @@ namespace Aqua.Tests
             cubeBack.transform.localScale = new Vector3(1.0f, 10.0f, 1.0f);
             cubeBack.transform.position = new Vector3(-10.0f, 0.0f, 10.0f);
 
+            // If we are testing using URP Pipeline, we need to set the Game Object's to use the
+            // correct URP Lit material that resembles the BIRP materials
+            if (GraphicsSettings.currentRenderPipeline != null) {
+                var lit = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                lit.SetColor("_BaseColor", Color.white);
+                lit.SetFloat("_Metallic", 0.0f);
+                lit.SetFloat("_Smoothness", 0.5f);
+                cubeFront.GetComponent<Renderer>().sharedMaterial = lit;
+                cubeBack.GetComponent<Renderer>().sharedMaterial = lit;
+            }
+            
             yield return RenderComparison(camera, graphicsTestSettings, "ReferenceImages/TestDepthBuffer", warmUpFrames: m_warmupFrames);
         }
 

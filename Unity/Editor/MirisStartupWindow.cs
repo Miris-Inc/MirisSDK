@@ -2,6 +2,11 @@ using Aqua.Runtime;
 
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
+
+using System;
+using System.Linq;
+using System.IO;
 
 namespace Aqua.Editor
 {
@@ -13,19 +18,68 @@ namespace Aqua.Editor
     /// </summary>
     public class StartupWindow : EditorWindow
     {
-        public static string PrefsKey = "MirisStartup_DoNotShowAgain";
+        public static string DoNotShowAgainPrefsKey = "MirisStartup_DoNotShowAgain";
+        public static string DoNotAutoDownloadPrefsKey = "MirisStartup_DoNotAutoDownloadBinaries";
         private static string _welcome_message =
             "The Miris Unity SDK is currently in a pre-alpha state, but feel free to look around.";
         private static string _asset_key_message =
             "If you have an Asset Viewer Key for use with this project (or need to replace your old one), please paste it below, and click \"Apply\"";
 
         private bool m_doNotShowAgain = false;
+        private bool m_doNotAutoDownloadBinaries = false;
         private string m_assetViewerKey = "";
 
         [MenuItem("Tools/Aqua/Show Startup Window", false, -10)]
         static void Init()
         {
             EditorWindow.GetWindow<StartupWindow>("Miris SDK").Show();
+        }
+
+        private static GraphicsDeviceType[] GetIdealGraphicsAPIs()
+        {
+            if (Application.platform == RuntimePlatform.OSXEditor || Application.platform == RuntimePlatform.OSXPlayer)
+            {
+                return new GraphicsDeviceType[] { GraphicsDeviceType.Metal, GraphicsDeviceType.Vulkan};
+            }
+
+            return new GraphicsDeviceType[] { GraphicsDeviceType.Vulkan};
+        }
+
+        private static GraphicsDeviceType[] GetCurrentGraphicsAPIs()
+        {
+            return PlayerSettings.GetGraphicsAPIs(EditorUserBuildSettings.activeBuildTarget);
+        }
+
+        public static bool ConfiguredWithIdealGraphicsAPI()
+        {
+            var playerGfxAPI = GetCurrentGraphicsAPIs()[0];
+            var idealGfxAPIs = GetIdealGraphicsAPIs();
+
+            // Checks whether the current build target's renderer is using an ideal/supported graphics API
+            return idealGfxAPIs.Contains(playerGfxAPI);
+        }
+
+        private static bool SwitchToGraphicsAPI(GraphicsDeviceType api)
+        {
+            var buildTarget = EditorUserBuildSettings.activeBuildTarget;
+
+            try
+            {
+                PlayerSettings.SetUseDefaultGraphicsAPIs(buildTarget, false);
+                PlayerSettings.SetGraphicsAPIs(buildTarget, new[] { api });
+                Debug.Log($"[Miris] Graphics API set to {api} for {buildTarget}.");
+
+                return EditorUtility.DisplayDialog(
+                    "Graphics API Set",
+                    $"Graphics API has been set to {api} for the current build target.\nPlease restart the Editor for full effect.",
+                    "Restart Editor", "Continue");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[Miris] Failed to set Graphics API to {api}: {ex}");
+            }
+
+            return false;
         }
 
         void OnGUI()
@@ -63,13 +117,41 @@ namespace Aqua.Editor
                 Application.OpenURL("https://miris.com/");
             }
 
+            if (!ConfiguredWithIdealGraphicsAPI())
+            {
+                EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
+
+                var playerGfxAPI = GetCurrentGraphicsAPIs()[0];
+                var idealGfxApi = GetIdealGraphicsAPIs()[0];
+
+                EditorGUILayout.HelpBox($"Graphics API is currently set to {playerGfxAPI}. Miris works best with {idealGfxApi}.", MessageType.Warning);
+
+                if (GUILayout.Button($"Switch to {idealGfxApi}", GUILayout.Height(30)))
+                {
+                    if (SwitchToGraphicsAPI(idealGfxApi))
+                    {
+                        EditorApplication.OpenProject(Directory.GetCurrentDirectory());
+                    }
+                }
+            }
             EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
 
-            m_doNotShowAgain = EditorGUILayout.Toggle("Do not show again", m_doNotShowAgain);
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Do not download plugin libraries automatically", wordWrap);
+            m_doNotAutoDownloadBinaries = EditorGUILayout.Toggle(m_doNotAutoDownloadBinaries);
+            EditorGUILayout.EndHorizontal();
+            
+            EditorGUILayout.Space();
+            
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Do not show this popup again", wordWrap);
+            m_doNotShowAgain = EditorGUILayout.Toggle(m_doNotShowAgain);
+            EditorGUILayout.EndHorizontal();
 
             if (GUILayout.Button("Dismiss"))
             {
-                EditorPrefs.SetBool(PrefsKey, m_doNotShowAgain);
+                EditorPrefs.SetBool(DoNotShowAgainPrefsKey, m_doNotShowAgain);
+                EditorPrefs.SetBool(DoNotAutoDownloadPrefsKey, m_doNotAutoDownloadBinaries);
                 Close();
             }
         }
@@ -89,11 +171,15 @@ namespace Aqua.Editor
                 return;
             }
 
-            // Do not show the window if the user has selected "Do Not Show Again"
-            string windowKey = StartupWindow.PrefsKey;
-            if (EditorPrefs.HasKey(windowKey) && EditorPrefs.GetBool(windowKey))
+            // Always show if the configured graphics API is not ideal
+            if (StartupWindow.ConfiguredWithIdealGraphicsAPI())
             {
-                return;
+                // Do not show the window if the user has selected "Do Not Show Again"
+                string windowKey = StartupWindow.DoNotShowAgainPrefsKey;
+                if (EditorPrefs.HasKey(windowKey) && EditorPrefs.GetBool(windowKey))
+                {
+                    return;
+                }
             }
 
             EditorWindow.GetWindow<StartupWindow>("Miris SDK").Show();

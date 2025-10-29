@@ -7,7 +7,9 @@ using UnityEngine.XR.Management;
 
 namespace Aqua.Runtime
 {
-
+    public static class XRFrameInfo {
+        public static int m_multipassId { get; set; }
+    }
     
     public class XRUtils
     {

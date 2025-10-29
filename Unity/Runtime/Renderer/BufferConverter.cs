@@ -12,11 +12,14 @@ namespace Aqua.Runtime
     public class MosaicTextureToAtlasBufferConverter
     {
         private List<BufferConvertCommand> m_convertCommands = new();
+        private Texture2D m_eccLut;
 
         private ComputeShader m_DecodeMosaicTextureToAtlasBufferShader;
         private int m_DecodeMosaicTextureToAtlasBufferKernel;
 
         private static readonly int ConvertBufferSrc = Shader.PropertyToID("_sourceBuffer");
+        private static readonly int LutEccTexture = Shader.PropertyToID("_eccLutTexture");
+        
         private static readonly int ConvertBufferDst = Shader.PropertyToID("_destBuffer");
 
         private static readonly int ConvertNumElements = Shader.PropertyToID("_srcNumSplats");
@@ -39,12 +42,15 @@ namespace Aqua.Runtime
         private static readonly int SrcMosaicMax = Shader.PropertyToID("_SrcMosaicMax");
         private static readonly int isSHColor = Shader.PropertyToID("_SrcIsSHColor");
         private static readonly int isRangeNormalized = Shader.PropertyToID("_IsRangeNormalized");
+        private static readonly int EccPart = Shader.PropertyToID("_EccPart");
+
 
         public static readonly ProfilerMarker s_ConvertBufferMarker = new ProfilerMarker("ConvertBuffers");
         public MosaicTextureToAtlasBufferConverter()
         {
             m_DecodeMosaicTextureToAtlasBufferShader = ComputeShader.Instantiate((ComputeShader)Resources.Load("Shaders/DecodeMosaicTextureToAtlasBuffer"));
             m_DecodeMosaicTextureToAtlasBufferKernel = m_DecodeMosaicTextureToAtlasBufferShader.FindKernel("ConvertBufferMain");
+            m_eccLut = Aqua.Runtime.AquaUnityApi.GetEccLUT();
         }
 
         public struct BufferConvertCommand
@@ -92,7 +98,9 @@ namespace Aqua.Runtime
                 
                 command.sourceBuffer.SetBufferOnComputeShader(commandBuffer, m_DecodeMosaicTextureToAtlasBufferShader, m_DecodeMosaicTextureToAtlasBufferKernel, ConvertBufferSrc);
                 command.destinationBuffer.SetBufferOnComputeShader(commandBuffer, m_DecodeMosaicTextureToAtlasBufferShader, m_DecodeMosaicTextureToAtlasBufferKernel, ConvertBufferDst);
-                
+
+                commandBuffer.SetComputeTextureParam(m_DecodeMosaicTextureToAtlasBufferShader, m_DecodeMosaicTextureToAtlasBufferKernel, LutEccTexture, m_eccLut);
+
                 commandBuffer.SetComputeIntParam(m_DecodeMosaicTextureToAtlasBufferShader, ConvertBufferLength, (int)command.dstAllocationLength);
                 commandBuffer.SetComputeIntParam(m_DecodeMosaicTextureToAtlasBufferShader, ConvertBufferDestOffset, (int)command.dstAllocationOffset);
 
@@ -111,6 +119,8 @@ namespace Aqua.Runtime
                 commandBuffer.SetComputeFloatParam(m_DecodeMosaicTextureToAtlasBufferShader, SrcMosaicMax, command.srcMosaic.m_max);
                 commandBuffer.SetComputeIntParam(m_DecodeMosaicTextureToAtlasBufferShader, isSHColor, command.srcMosaic.m_isShColor);
                 commandBuffer.SetComputeIntParam(m_DecodeMosaicTextureToAtlasBufferShader, isRangeNormalized, command.srcMosaic.m_isRangeNormalized);
+                commandBuffer.SetComputeIntParam(m_DecodeMosaicTextureToAtlasBufferShader, EccPart, command.srcMosaic.m_eccPart);
+
 
 
                 var (threadGroupCountX, _, _) = ComputeKernelUtils.CalculateThreadGroupCount(

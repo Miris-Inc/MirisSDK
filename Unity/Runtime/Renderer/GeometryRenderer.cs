@@ -12,6 +12,7 @@ using UnityEngine.Rendering;
 using Unity.Profiling;
 using Unity.Profiling.LowLevel;
 using Unity.Mathematics;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.XR;
 
 
@@ -784,7 +785,15 @@ namespace Aqua.Runtime
             if (m_xrUtils.IsMultiPassXR())
             {
                 // set the appropriate eye data index for the active eye in this pass
-                eyeDataIndex = (int)camera.stereoActiveEye;
+                eyeDataIndex = (int)camera.stereoActiveEye; 
+                
+                // Unity is not sending the correct active eye when using URP + Multi-pass.
+                // stereoActiveEye is read as 2, which means Mono, thus incorrect. 
+                // The snippet below checks if we are using URP and fetches the correct active eye using the URP camera.xr.multipasId
+                if (GraphicsSettings.currentRenderPipeline != null) {
+                    eyeDataIndex = XRFrameInfo.m_multipassId;
+                }
+                
             }
 
             commandBuffer.SetComputeIntParam(m_map3DGSShader, ShaderIds.EyeDataIndex, eyeDataIndex);

@@ -67,7 +67,6 @@ namespace Aqua.Runtime
 #endif
 
 #if USING_CSHARP
-
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
         public string m_version;
 #else

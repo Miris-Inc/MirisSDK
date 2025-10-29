@@ -1,13 +1,16 @@
 // Copyright © 2024 Miris. All rights reserved.
 
 // C# Standard library
+using AOT;
 using System;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
-using AOT;
+using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 
 // Unity packages
 using UnityEngine;
+using UnityEngine.UIElements;
 
 // The functionality in this file is subject to change as the scene API evolves.
 
@@ -354,9 +357,23 @@ namespace Aqua.Runtime
         [DllImport(AquaUnityPath)]
         static private extern void SeekToTime(AquaClientHandle client, ref Timecode newTime);
 
+        [DllImport(AquaUnityPath)]
+        static private extern IntPtr GetEccLutData();
+
         #endregion
 
         #region Public calls that forward to the private C API
+
+        static public Texture2D GetEccLUT()
+        {
+            IntPtr data = GetEccLutData();
+            NativeArray<byte> nativeArray = DataFormatUtils.WrapVoidPtrWithNativeArray(data, 256 * 256);
+            Texture2D lut = new Texture2D(256, 256, TextureFormat.R8, false, true);
+            lut.SetPixelData<byte>(nativeArray, mipLevel: 0);
+            lut.Apply(updateMipmaps: false, makeNoLongerReadable: true);
+            return lut;
+        }
+
 
         /// <summary>
         /// Tells the C API where the USD path and plugins are stored.
@@ -722,19 +739,23 @@ namespace Aqua.Runtime
             return tcs.Task;
         }
 
-        public static Task<bool> SetServerEnvironment(string environment)
+        public static event Action<string> ServerEnvironmentChanged;
+
+        public static async Task<bool> SetServerEnvironment(string environment)
         {
             var tcs = new TaskCompletionSource<bool>();
 
             var handle = GCHandle.Alloc(tcs);
             AquaUnityApi.SetServerEnvironment(environment, SetServerEnvironmentCallback, GCHandle.ToIntPtr(handle));
 
-            return tcs.Task.ContinueWith(t => {
-                if (t.Result) {
-                    s_selectedEnvironment = environment;
-                }
-                return t.Result;
-            }, TaskContinuationOptions.OnlyOnRanToCompletion);
+            bool result = await tcs.Task;
+            
+            if (result) {
+                s_selectedEnvironment = environment;
+                ServerEnvironmentChanged?.Invoke(environment);
+            }
+
+            return result;
         }
 
         public static string GetDefaultEnvironment()
