@@ -1,0 +1,74 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &2877502631604292591
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2889058374165635552}
+  - component: {fileID: 2249271679946566998}
+  m_Layer: 0
+  m_Name: Miris Stream Controller
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2889058374165635552
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2877502631604292591}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2249271679946566998
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2877502631604292591}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b9c0e532fbb4340dbb0cdce165759e08, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_cameraOffset: {fileID: 0}
+  m_cameraOriginObject: {fileID: 0}
+  m_useDropFiles: 1
+  m_enableSkybox: 1
+  m_enableStreamVisualization: 0
+  m_dataSource: 0
+  m_tileCreationMode: 0
+  m_executionMode: 0
+  m_sceneMetadata:
+    m_version: 
+    m_highestLodLimit: 0.8
+    m_lowestLodLimit: 0
+    m_lodMaxDistance: 20
+    m_verticalOffset: 0
+    m_spawnBehavior: 0
+  m_lodRefinementParameters:
+    m_lodSelectionMode: 0
+    m_lodRequestPriority: 1
+    m_graphicsLodCalibratorType: 0
+    m_graphicsLodCalibratorInfluence: 0.5
+    m_targetFramesPerSecond: 72
+    m_lowestLodLimit: 0
+    m_highestLodLimit: 0.8
+    m_lodMaxDistance: 20
+    m_lodUpdateDistance: 5
+    m_lodUpdateRotation: 20
+    m_fixedLodIndex: 10
+  m_fadeDurationSeconds: 0.3
