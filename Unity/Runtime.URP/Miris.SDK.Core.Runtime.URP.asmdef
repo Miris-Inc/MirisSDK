@@ -1,0 +1,26 @@
+{
+    "name": "Miris.SDK.Core.Runtime.URP",
+    "rootNamespace": "Aqua.Runtime",
+    "references": [
+        "GUID:1ab2b2706896b4c9dac50b3c5758e8e9",
+        "GUID:d8b63aba1907145bea998dd612889d6b",
+        "GUID:15fc0a57446b3144c949da3e2b9737a9",
+        "GUID:b4517ec124862cb4bb3b8b27d72843a6",
+        "GUID:df380645f10b7bc4b97d4f5eb6303d95"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.render-pipelines.universal",
+            "expression": "",
+            "define": "GS_ENABLE_URP"
+        }
+    ],
+    "noEngineReferences": false
+}
