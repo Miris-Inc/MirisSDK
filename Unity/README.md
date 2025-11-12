@@ -27,28 +27,25 @@ For deployments targeting specific devices, the minimum system requirements are 
 
 ## Installation
 
-1. Make sure [git](https://git-scm.com/) and [git lfs](https://git-lfs.com/) are installed on your device.
+1. Make sure [git](https://git-scm.com/) is installed on your device.
 
-2. Temporarily, since we are using a private repo for this package, you will need to download and set up the [Git Credential Manager](https://docs.unity3d.com/6000.2/Documentation/Manual/upm-config-https-git.html).
-
-    * Once installed, go to the unity project repo you want to have this package in and run `git config --global credential.helper manager`
-    * Followed by `git ls-remote --heads https://github.com/Miris-Inc/MirisSDK HEAD`
-
-3. Open a Unity Project and use the Package Manager to install the Miris SDK. **Please ensure that you are not in Play mode before proceeding with the following steps.**
+2. Open a Unity Project and use the Package Manager to install the Miris SDK. **Please ensure that you are not in Play mode before proceeding with the following steps.**
 
     * Navigate to Window -> Package Manager
     ![](img/package_manager_1.png)
     * Use the "+" button to `Install git package from url...`
     ![](img/package_manager_2.png)
-    * Paste the following and hit install: `https://github.com/Miris-Inc/MirisSDK.git?path=Unity#v0.1.4`
+    * Paste the following and hit install: `https://github.com/Miris-Inc/MirisSDK.git?path=Unity#latest`
     ![](img/package_manager_3.png)
 
-4. Verify that the native libraries were downloaded. The Miris Unity Integration uses native libraries (such as DLLs) for performance reasons. When the Package Manager downloads the integration, it tries to download the native libraries, but you should verify before you begin development.
+3. The Miris SDK will need to install the native libaries it uses into the `Assets/Plugins/Miris` folder. If this folder does not contain platform folders with libraries inside, you will need to download them via the in editor tool. 
 
-    * Check the `Assets/Plugins/Miris` folder in your project. If it is empty, you'll need to go through the following additional steps.
+    * If the `Assets/Plugins/Miris` folder already contains the libraries, you can skip to step 6.
 
 <!--MDX_ACCORDION="Downloading the Native Libraries"-->
-5. Using a GitHub PAT to download the Native Libraries
+4. Using a GitHub PAT for library downloading
+    * If you already have a token, skip to step 5. 
+
     * We strongly recommend using a Fine-Grained token for this process. Visit https://github.com/settings/personal-access-tokens - and click "Generate New Token"
     ![](img/git/generate-new-token.png)
 
@@ -59,19 +56,20 @@ For deployments targeting specific devices, the minimum system requirements are 
     ![](img/git/set-token-params-2.png)
 
     * Click "Generate Token". **Save this token in a secrets or password manager.**
+<!--END_MDX_ACCORDION-->
 
-    * Back in the Unity Editor window, in the toolbar, select Tools -> Miris -> Platform Downloader
-    ![](img/git/downloader-1.png)
+5. Miris Platform Downloader Editor Tool
+    * In the Unity Editor window, in the toolbar, select Tools -> Miris -> Platform Downloader
+      ![](img/git/downloader-1.png)
 
     * If you've been directed to download a specific release, change the Tag field. Otherwise, paste your token into the GitHub Token field, and then click Load Release by Tag.
 
-    * All compaitble releases should be selected for you. Click Install Selected.
-    ![](img/git/downloader-2.png)
-<!--END_MDX_ACCORDION-->
-
+    * All compatible releases should be selected for you. Click Install Selected.
+      ![](img/git/downloader-2.png)
+s
 6. Settings changes
 
-    * If your project is on URP, you will need to add the Gaussian Splat Render Pass.
+    * If your project is on URP (Universal Render Pipeline), then you will need to add the Gaussian Splat Render Pass component.  If not, skip to step 7.
 
     * In your Assets folder, find the Settings folder. In there you will need to update the Renderer assets to add a component/render feature: `Gaussian Splat Render Pass`
 
@@ -85,17 +83,15 @@ For deployments targeting specific devices, the minimum system requirements are 
 
     * Drop the Miris Stream and `Miris Stream Controller` prefab into your scene.
     ![Prefab Setup](img/prefab_setup.png)
-    * Drag the controller prefab into the slot in the Stream prefab.
-    * On the `Miris Stream` prefab, enter the url for an asset you want to stream. For example `https://devcontents3.miris.com/prod/tokyo/1x1/structure.usda`
+    * On the `Miris Stream` prefab, enter the URL for the asset you want to stream. For example `https://devcontents3.miris.com/prod/tokyo/1x1/structure.usda`
 
-8. Press play
+8. Stream!
 
-    * This will start the streaming process and load the asset into your scene.
+    * There are editor scripts in place to allow you to see the streaming content in the editor window without being in play mode. 
+    * You can also press play to start streaming.
 
 <!--MDX_STRIP-->
 ### Notes
 
-* **Currently investigating solutions to issues running aqua-dlls/libs built on another machine. The first versions of this SDK might not run properly on your machine due to this and potential OS security blockings.**
-* This sdk has not been fully tested and is being posted mostly for format purposes in this version.
 * Miris employees should consult the centralized documentation, rather than this document.
 <!--END_MDX_STRIP-->

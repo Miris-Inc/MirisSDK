@@ -100,7 +100,6 @@ namespace Aqua.Runtime
 
         public void RegisterRenderer(GaussianSplatRenderComponent component)
         {
-            Debug.Log("Registering GaussianSplatRenderComponent " + component.gameObject.name + " to the system.");
             Assert.IsFalse(m_components.Contains(component));
 
             // On initial registration & if we are using built-in renderer,
@@ -119,7 +118,6 @@ namespace Aqua.Runtime
                 return;
             }
 
-            Debug.Log("Removing GaussianSplatRenderComponent " + component.gameObject.name + " from the system.");
             m_components.Remove(component);
 
             // If we're un-registering the last renderer
@@ -284,8 +282,8 @@ namespace Aqua.Runtime
                     Vector3 objectCenterB = b.GetObjectBounds().center;
 
                     // Transform the bound centers to worldspace.
-                    Vector3 worldCenterA = a.transform.TransformPoint(objectCenterA);
-                    Vector3 worldCenterB = b.transform.TransformPoint(objectCenterB);
+                    Vector3 worldCenterA = a.m_transform.TransformPoint(objectCenterA);
+                    Vector3 worldCenterB = b.m_transform.TransformPoint(objectCenterB);
 
                     // Compare distance from camera to object center in world space.
                     float distA = (cameraPosition - worldCenterA).sqrMagnitude;

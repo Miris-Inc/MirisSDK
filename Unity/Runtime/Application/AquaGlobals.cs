@@ -75,12 +75,6 @@ namespace Aqua.Runtime
             if (!string.IsNullOrEmpty(response))
             {
                 CloudConfig config = JsonUtility.FromJson<CloudConfig>(response);
-                if (config.@override && config.overrideEnv != null)
-                {
-                    Debug.Log($"override url: {config.overrideEnv.baseUrl}");
-                    MirisStreamController.SetProductionURLPrefix(config.overrideEnv.baseUrl);
-                }
-
                 if (config.performServerTests)
                 {
                     string deviceId = SystemInfo.deviceUniqueIdentifier;

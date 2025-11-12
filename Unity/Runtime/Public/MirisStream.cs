@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Aqua.Runtime
@@ -25,6 +26,21 @@ namespace Aqua.Runtime
         [NonSerialized]
         public AquaSceneObject m_sceneObject = null;
 
+        // A stream can be composed of multiple assets. This map allows you to obtain the render component associated with an asset
+        [NonSerialized]
+        public Dictionary<int, GaussianSplatRenderComponent> m_assetRootObjectIdToRenderComponent = new();
+
+        // Convenience getter for the most frequent case where a stream has only 1 asset
+        public GaussianSplatRenderComponent m_renderComponent =>
+            m_assetRootObjectIdToRenderComponent.Count > 0 ? m_assetRootObjectIdToRenderComponent[0] : null;
+
+        public GaussianSplatRenderComponent CreateRenderComponent(int assetRootObjectId)
+        {
+            GaussianSplatRenderComponent renderComponent = new();
+            Debug.Assert(!m_assetRootObjectIdToRenderComponent.ContainsKey(assetRootObjectId));
+            m_assetRootObjectIdToRenderComponent.Add(assetRootObjectId, renderComponent);
+            return renderComponent;
+        }
 
         #region Public API
         /// <summary>
@@ -86,6 +102,40 @@ namespace Aqua.Runtime
             return m_sceneObject != null;
         }
 
+        public Bounds GetObjectBounds()
+        {
+            // TODO: Cache this when data sources get updated
+
+            Vector3 minBound = Vector3.positiveInfinity;
+            Vector3 maxBound = Vector3.negativeInfinity;
+            foreach (var renderComponent in m_assetRootObjectIdToRenderComponent.Values)
+            {
+                minBound = Vector3.Min(minBound, renderComponent.GetObjectBounds().min);
+                maxBound = Vector3.Max(maxBound, renderComponent.GetObjectBounds().max);
+            }
+
+            Bounds bounds = new();
+            bounds.SetMinMax(minBound, maxBound);
+            return bounds;
+        }
+
+        public Bounds GetWorldBounds()
+        {
+            // TODO: Cache this when data sources get updated
+
+            Vector3 minBound = Vector3.positiveInfinity;
+            Vector3 maxBound = Vector3.negativeInfinity;
+            foreach (var renderComponent in m_assetRootObjectIdToRenderComponent.Values)
+            {
+                minBound = Vector3.Min(minBound, renderComponent.GetWorldBounds().min);
+                maxBound = Vector3.Max(maxBound, renderComponent.GetWorldBounds().max);
+            }
+
+            Bounds bounds = new();
+            bounds.SetMinMax(minBound, maxBound);
+            return bounds;
+        }
+
         #endregion
 
         // --------------------------------------------------------------------
@@ -95,28 +145,15 @@ namespace Aqua.Runtime
         #region MonoBehaviour
         protected void OnEnable()
         {
-            // Temp silliness until we get rid of the render component as a required element
-            {
-                var renderComponent = GetComponent<GaussianSplatRenderComponent>();
-                if (renderComponent != null)
-                {
-                    if (Application.isPlaying)
-                    {
-                        Destroy(renderComponent);
-                    }
-                    else
-                    {
-                        DestroyImmediate(renderComponent);
-                    }
-                }
-            }
-
             RegisterController();
             LoadStream();
         }
 
+
         protected void OnDisable()
         {
+            ClearRenderResources();
+
             // Skip cleanup if application is quitting - native client may already be destroyed
             if (m_streamController != null && m_streamController.IsApplicationQuitting)
             {
@@ -135,6 +172,17 @@ namespace Aqua.Runtime
             }
 
             CheckUrlChanged();
+            foreach (var renderComponent in m_assetRootObjectIdToRenderComponent.Values)
+            {
+                renderComponent.Update(transform);
+            }
+        }
+
+        protected void OnDrawGizmosSelected()
+        {
+            Bounds worldBounds = GetWorldBounds();
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawWireCube(worldBounds.center, worldBounds.size);
         }
         #endregion
 
@@ -168,6 +216,7 @@ namespace Aqua.Runtime
         {
             if (IsLoaded() && m_streamController != null)
             {
+                ClearRenderResources();
                 m_streamController.RemoveStream(this);
                 m_loadedUrl = "";
             }
@@ -226,6 +275,16 @@ namespace Aqua.Runtime
             }
 
             m_streamController = null;
+        }
+
+
+        private void ClearRenderResources()
+        {
+            foreach (var renderComponent in m_assetRootObjectIdToRenderComponent.Values)
+            {
+                renderComponent.Dispose();
+            }
+            m_assetRootObjectIdToRenderComponent.Clear();
         }
     }
 }
