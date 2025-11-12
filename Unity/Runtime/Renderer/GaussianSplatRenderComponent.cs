@@ -3,43 +3,20 @@
 // C# Standard Library
 using System;
 using System.Linq;
+using System.Collections.Generic;
 
 // Unity Engine
 using UnityEngine;
 using UnityEngine.Assertions;
 using UnityEngine.Rendering;
-using UnityEngine.XR;
-using UnityEditor;
 
 // Unity packages
 using Unity.Profiling;
-using System.Collections.Generic;
-using UnityEngine.UIElements;
 
 namespace Aqua.Runtime
 {
-    /// <summary>
-    /// GaussianSplatRenderComponent provides the Unity interface for rendering gaussian splats.
-    ///
-    /// Each GaussianSplatRenderComponent will register itself to GaussianSplatRenderSystem which
-    /// installs the camera callbacks for performing the graphics API calls.
-    /// 
-    /// The component holds onto a GaussianSplatRenderer instance that implements the actual
-    /// rendering functionality. 
-    ///
-    /// When the m_dataSource reference is updated, GPU resources will be initialized and data 
-    /// is transferred to the active GaussianSplatRenderer.
-    /// 
-    /// - Update() is called per-frame and is used to pass any renderer specific state.
-    /// - Render() is called by the GaussianSplatRenderSystem and invokes the chosen render pipeline.
-    /// 
-    /// TODO:
-    /// 1. Get viewport framing to work
-    /// 
-    /// </summary>
 
-    [ExecuteInEditMode]
-    public class GaussianSplatRenderComponent : MonoBehaviour
+    public class GaussianSplatRenderComponent : IDisposable
     {
         // ... existing fields ...
         public void UpdateCompositePass(Material material)
@@ -48,11 +25,6 @@ namespace Aqua.Runtime
                 m_gsRenderer.UpdateCompositePass(material);
         }
         // Reference to source 3DGS asset data.
-        [SerializeField]
-        [Tooltip("The asset to render (debug aid only)")]
-        public GaussianSplatAquaDataSource[] m_dataSourceComponents;
-        [SerializeField]
-        [HideInInspector]
         public GaussianSplatDataSource[] m_dataSources;
         private GaussianSplatDataSource[] m_prevDataSources;
         private GaussianSplatDataSource[] m_validDataSources;
@@ -63,14 +35,15 @@ namespace Aqua.Runtime
         private DebugRenderer m_debugRenderer;
 
         // Cached bounds
-        private Bounds m_bounds = new();
-        private Bounds m_physicalBounds;
+        private Bounds m_dataSourceBounds = new();
+        private Bounds m_objectBounds = new();
+        private Bounds m_worldBounds = new();
 
         // Tracks the number of frames that has been rendered
         // in order to know when to execute the sorting algorithm.
         private int m_frameCounter = 0;
 
-        private AquaTransform m_transform;
+        public AquaTransform m_transform;
         public Matrix4x4 m_assetMatrix = Matrix4x4.identity;
 
         // ---------------------------------------------------------
@@ -83,37 +56,20 @@ namespace Aqua.Runtime
             Points
         }
 
-        [Space(10)]
-        [SerializeField]
         public Pipeline m_renderPipeline = Pipeline.Geometry;
-        private Pipeline m_prevRenderPipeline;
+        private Pipeline m_prevRenderPipeline = Pipeline.Geometry;
 
         // ---------------------------------------------------------
         // Common Renderer Options
         // ---------------------------------------------------------
-
-        [Header("Common Options")]
-
-        [SerializeField]
-        [Range(0.0f, 3.0f)]
         public float m_gaussianSigmaThreshold = 2.5f;
 
-        [SerializeField]
-        [Range(0.0f, 1.0f)]
         public float m_alphaCullingThreshold = 0.06f;
-
-        [SerializeField]
-        [Range(0, 3)]
-        [Tooltip("Spherical Harmonics order to use")]
         public int m_SHOrder = 0;
 
         // ---------------------------------------------------------
         // Geometry Renderer Specific Options
         // ---------------------------------------------------------
-
-        [Header("Geometry Renderer Options")]
-        [SerializeField]
-        [Tooltip("The active draw mode")]
         public GeometryRenderer.GeometryDrawMode m_drawMode = GeometryRenderer.GeometryDrawMode.Splats;
 
         // Array of geometry renderer modes that require debug drawing
@@ -131,11 +87,7 @@ namespace Aqua.Runtime
         public int m_lodHeatMapMinLodIndex = 0;
         public int m_lodHeatMapMaxLodIndex = 5;
 
-        [SerializeField]
-        [Range(0.0f, 10.0f)]
         public float m_nearClipThreshold = 0.25f;
-
-        [SerializeField]
         public bool m_fadeLargeSplats = false;
 
         // ---------------------------------------------------------
@@ -143,47 +95,21 @@ namespace Aqua.Runtime
         // ---------------------------------------------------------
 
         // Allow selection of different GPU Sorting Algorithms.
-        [SerializeField] private GpuSortAlgorithm m_sortAlgorithm = GpuSortAlgorithm.DeviceRadixSort;
+        private GpuSortAlgorithm m_sortAlgorithm = GpuSortAlgorithm.DeviceRadixSort;
 
         private GpuSortAlgorithm m_prevSortAlgorithm;
 
-        [SerializeField]
-        [Tooltip(
-            "Controls when the renderer decides to sort.  Warning: Has an impact on runtime performance.\n\n" +
-            "Disabled: Do not sort at all\n" +
-            "OnceOnFirstFrame: Sort only ONCE on the very first frame, and not ever after\n" +
-            "FirstCameraPerNthFrame: Sort only for the first camera every Nth frame, controlled via the 'Sort Nth Frame' property\n" +
-            "FirstCameraPerFrame: Sort only for the first camera on every frame\n" +
-            "PerCameraPerFrame: Sort for every camera on every frame.\n"
-        )]
         private GeometryRenderer.SortBehavior m_sortBehavior = GeometryRenderer.SortBehavior.FirstCameraPerFrame; // This is our optimal default
 
-        [SerializeField]
-        [Range(1, 4800)]
-        [Tooltip("Number of frames before the sorting algorithm executes when Sort Behavior is set to 'One Camera Per Nth Frame'")]
         private int m_sortNthFrame = 100;
 
         // ---------------------------------------------------------
         // Point Renderer Specific Options
         // ---------------------------------------------------------
 
-        [Header("Point Renderer Options")]
-
-        [SerializeField]
-        [Tooltip("Points draw mode")]
         public PointRenderer.PointDrawMode m_pointsDrawMode = PointRenderer.PointDrawMode.SplatColor;
-
-        [SerializeField]
-        [Tooltip("Points SH Axis (First Order)")]
         public PointRenderer.SHAxis m_pointsSHAxis = PointRenderer.SHAxis.X;
-
-        [SerializeField]
-        [Tooltip("Points SH Color Channel")]
         public PointRenderer.SHChannel m_pointsSHChannel = PointRenderer.SHChannel.Red;
-
-        [SerializeField]
-        [Range(1, 20)]
-        [Tooltip("Points SH Flatness Percentage")]
         public int m_pointsFlatnessPercent = 2;
 
         // ---------------------------------------------------------
@@ -208,6 +134,22 @@ namespace Aqua.Runtime
         // Public API
         // ---------------------------------------------------------
 
+        // Called when this component is enabled.
+        public GaussianSplatRenderComponent()
+        {
+            GaussianSplatRenderSystem.m_instance.RegisterRenderer(this);
+        }
+
+        // Called when this component is disabled.
+        public void Dispose()
+        {
+            GaussianSplatRenderSystem.m_instance.UnregisterRenderer(this);
+            m_gsRenderer?.Dispose();
+            m_gsRenderer = null;
+            m_debugRenderer?.Dispose();
+            m_debugRenderer = null;
+        }
+
         public int GetSplatCount()
         {
             return m_gsRenderer != null ? m_gsRenderer.splatCount : 0;
@@ -215,12 +157,12 @@ namespace Aqua.Runtime
 
         public Bounds GetObjectBounds()
         {
-            return m_bounds;
+            return m_objectBounds;
         }
 
-        public Bounds GetApproximatePhysicalBounds()
+        public Bounds GetWorldBounds()
         {
-            return m_physicalBounds;
+            return m_worldBounds;
         }
 
         // Is our data source in a valid state?
@@ -247,35 +189,7 @@ namespace Aqua.Runtime
             return false;
         }
 
-        // ---------------------------------------------------------
-        // Unity event handling
-        // ---------------------------------------------------------
-
-        public void Awake()
-        {
-            m_prevRenderPipeline = m_renderPipeline;
-        }
-
-        // Called when this component is enabled.
-        public void OnEnable()
-        {
-            // This will trigger the resources to be populated in the next Update() where
-            // there is a valid m_dataSource.
-            GaussianSplatRenderSystem.m_instance.RegisterRenderer(this);
-        }
-
-        // Called when this component is disabled.
-        public void OnDisable()
-        {
-            GaussianSplatRenderSystem.m_instance.UnregisterRenderer(this);
-            m_gsRenderer?.Dispose();
-            m_gsRenderer = null;
-            m_debugRenderer?.Dispose();
-            m_debugRenderer = null;
-        }
-
-        // Update is called once per frame
-        public void Update()
+        public void Update(Transform transform)
         {
             // The renderer may be asked to update when the asset is in an  
             // invalid state. If this happens just skip any further updates
@@ -357,20 +271,6 @@ namespace Aqua.Runtime
             return false;
         }
 
-        private GaussianSplatDataSource[] GetValidDataSources()
-        {
-            List<GaussianSplatDataSource> validDataSources = new(m_dataSources.Length);
-            foreach (GaussianSplatDataSource dataSource in m_dataSources)
-            {
-                if (dataSource.IsValid())
-                {
-                    validDataSources.Add(dataSource);
-                }
-            }
-
-            return validDataSources.ToArray();
-        }
-
         private bool RendererDirty()
         {
             bool missing_renderer = (m_gsRenderer == null);
@@ -410,8 +310,11 @@ namespace Aqua.Runtime
             Vector3 camWorldPos = camera.transform.position;
             foreach (var dataSource in m_dataSources)
             {
-                if (!dataSource.IsValid())
+                // Filter out invalid or inactive data sources.
+                if (!dataSource.IsValid() || !dataSource.m_active)
+                {
                     continue;
+                }
 
                 Bounds dataSourceBounds = dataSource.GetObjectBounds();
                 if (!performCulling || GeometryUtility.TestPlanesAABB(localPlanes, dataSourceBounds))
@@ -429,13 +332,22 @@ namespace Aqua.Runtime
             return sorted;
         }
 
-        private void CalculatePhysicalBounds()
+        private void CalculateObjectAndWorldBounds()
         {
-            Vector3[] corners = BoundsUtils.BoundsGetCorners(m_bounds);
-            m_physicalBounds = new Bounds(m_transform.TransformPoint(corners[0]), Vector3.zero);
+            Vector3[] corners = BoundsUtils.BoundsGetCorners(m_dataSourceBounds);
+
+            // Calculate object space bounds 
+            m_objectBounds = new Bounds(m_assetMatrix.MultiplyPoint3x4(corners[0]), Vector3.zero);
             for (int cornerIndex = 1; cornerIndex < corners.Length; cornerIndex++)
             {
-                m_physicalBounds.Encapsulate(m_transform.TransformPoint(corners[cornerIndex]));
+                m_objectBounds.Encapsulate(m_assetMatrix.MultiplyPoint3x4(corners[cornerIndex]));
+            }
+
+            // Calculate world space bounds
+            m_worldBounds = new Bounds(m_transform.TransformPoint(corners[0]), Vector3.zero);
+            for (int cornerIndex = 1; cornerIndex < corners.Length; cornerIndex++)
+            {
+                m_worldBounds.Encapsulate(m_transform.TransformPoint(corners[cornerIndex]));
             }
         }
 
@@ -471,14 +383,11 @@ namespace Aqua.Runtime
                 // Update resources on the active renderer
                 m_gsRenderer.UpdateResources(m_validDataSources);
 
-                Debug.Log($"'{GameObjectUtils.GetGameObjectPath(gameObject)}': updated renderer with {m_gsRenderer.splatCount} splats for {m_validDataSources.Length} visible dataSources");
-
                 // Update render pipeline specific things
                 switch (m_renderPipeline)
                 {
                     case Pipeline.Geometry:
                         (m_gsRenderer as GeometryRenderer).SetSortAlgorithm(m_sortAlgorithm);
-                        (m_gsRenderer as GeometryRenderer).SetObjectIdColor(GameObjectUtils.HashGameObjectToColor(this.gameObject));
                         break;
                     default:
                         break;
@@ -492,16 +401,17 @@ namespace Aqua.Runtime
                     // expanding the bounds using Bounds.Encapsulate(Bounds) for each source
                     Vector3 minBound = Vector3.positiveInfinity;
                     Vector3 maxBound = Vector3.negativeInfinity;
-                    Bounds dataSourceBound = new();
                     foreach (var dataSource in m_validDataSources)
                     {
-                        dataSourceBound = dataSource.GetObjectBounds();
-                        minBound = Vector3.Min(minBound, dataSourceBound.min);
-                        maxBound = Vector3.Max(maxBound, dataSourceBound.max);
+                        Bounds dataSourceBounds = dataSource.GetObjectBounds();
+                        minBound = Vector3.Min(minBound, dataSourceBounds.min);
+                        maxBound = Vector3.Max(maxBound, dataSourceBounds.max);
                     }
-                    m_bounds.SetMinMax(minBound, maxBound);
+                    m_dataSourceBounds.SetMinMax(minBound, maxBound);
+
+                    CalculateObjectAndWorldBounds();
                 }
-                CalculatePhysicalBounds();
+                
             }
         }
 
@@ -587,12 +497,6 @@ namespace Aqua.Runtime
                     dataSource.GetObjectIdColor()
                 );
             }
-        }
-
-        private void OnDrawGizmosSelected()
-        {
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawWireCube(m_physicalBounds.center, m_physicalBounds.size);
         }
     }
 }
