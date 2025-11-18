@@ -35,28 +35,7 @@ namespace Aqua.Runtime
         {
             // We could do other stuff here like present a custom loading / splash screen, preloading of resources, etc. 
 
-            WarmUpRenderer();
             CloudInit();
-        }
-
-        private void WarmUpRenderer()
-        {
-            // Warm up the shaders by instantiating a renderer and deleting it after a second.
-            MirisStream stream = FindFirstObjectByType<MirisStream>();
-
-            // Temporary work around for only allowing a single AquaScene root: Only warm up if scene path is not set to anything
-            if (stream != null && stream.m_url == "")
-            {
-                // TODO: Need a more robust way to get access to this single splat data that doesn't involve downloading from the internet?
-                stream.m_url = "https://devcontents3.miris.com/test/single-chunk/single/0_0_0-0.ply";
-                StartCoroutine(ClearUrlLater(stream, 0.1f));
-            }
-        }
-
-        private IEnumerator ClearUrlLater(MirisStream stream, float secondsLater)
-        {
-            yield return new WaitForSeconds(secondsLater);
-            stream.m_url = "";
         }
 
         private async void CloudInit()

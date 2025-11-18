@@ -19,6 +19,13 @@ namespace Aqua.Runtime {
     public delegate void SetServerEnvironmentCallback(bool success, System.IntPtr userData);
 #endif
 
+#if __cplusplus
+    using AddStreamCallback = void(*)(int objectId, void* userData);
+#else
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    public delegate void AddStreamCallback(int objectId, System.IntPtr userData);
+#endif
+
 #if USING_CSHARP
 }
 #endif
