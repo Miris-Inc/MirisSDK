@@ -244,6 +244,9 @@ namespace Aqua.Runtime
         static private extern int AddStream(AquaClientHandle client, string streamName, string contentUrl, int clientType, bool doNotRefine);
 
         [DllImport(AquaUnityPath)]
+        static private extern int AddStreamById(AquaClientHandle client, string streamName, string assetId, int clientType, bool doNotRefine, AddStreamCallback callback, IntPtr userData);
+
+        [DllImport(AquaUnityPath)]
         static private extern bool RemoveStream(AquaClientHandle client, int streamObjectId);
 
         [DllImport(AquaUnityPath)]
@@ -507,6 +510,11 @@ namespace Aqua.Runtime
         static public int AddStream(string streamName, string contentUrl, int clientType, bool doNotRefine)
         {
             return AddStream(s_instance.m_client, streamName, contentUrl, clientType, doNotRefine);
+        }
+
+        static public int AddStreamById(string streamName, string assetId, int clientType, bool doNotRefine, AddStreamCallback callback, IntPtr userData)
+        {
+            return AddStreamById(s_instance.m_client, streamName, assetId, clientType, doNotRefine, callback, userData);
         }
 
         static public bool RemoveStream(int streamObjectId)
@@ -930,6 +938,42 @@ namespace Aqua.Runtime
         {
             int streamObjectId = AquaUnityApi.AddStream(streamName, url, AquaUnityApi.UNITY_CLIENT, doNotRefine);
             return GetSceneObject(streamObjectId);
+        }
+
+        class AddStreamCallbackUserdata
+        {
+            public TaskCompletionSource<AquaSceneObject> m_tcs;
+            public AquaClient m_client;
+        }
+
+        [MonoPInvokeCallback(typeof(AddStreamCallback))]
+        private static void NativeAsyncAddStreamCallback(int streamId, System.IntPtr userData)
+        {
+            var handle = GCHandle.FromIntPtr(userData);
+            var castedData = (AddStreamCallbackUserdata)handle.Target;
+            handle.Free();
+
+            if (castedData != null)
+            {
+                castedData.m_tcs.SetResult(new(streamId));
+            }
+        }
+
+        public Task<AquaSceneObject> AddStreamById(string streamName, string uuid, bool doNotRefine=false)
+        {
+            var tcs = new TaskCompletionSource<AquaSceneObject>();
+
+            if (string.IsNullOrEmpty(uuid))
+            {
+                tcs.SetResult(null);
+            }
+            else
+            {
+                var handle = GCHandle.Alloc(new AddStreamCallbackUserdata() { m_tcs = tcs });
+                AquaUnityApi.AddStreamById(streamName, uuid, AquaUnityApi.UNITY_CLIENT, doNotRefine, NativeAsyncAddStreamCallback, GCHandle.ToIntPtr(handle));
+            }
+
+            return tcs.Task;
         }
 
         public bool RemoveStream(AquaSceneObject streamObject)

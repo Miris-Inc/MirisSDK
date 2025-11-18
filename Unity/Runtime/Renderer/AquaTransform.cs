@@ -32,7 +32,7 @@ namespace Aqua.Runtime
         {
             AquaTransform result = new();
             result.m_localToWorldMatrix = transform.m_localToWorldMatrix * matrix;
-            Debug.Assert(Matrix4x4.Inverse3DAffine(result.m_localToWorldMatrix, ref result.m_worldToLocalMatrix));
+            Matrix4x4.Inverse3DAffine(result.m_localToWorldMatrix, ref result.m_worldToLocalMatrix);
 
             return result;
         }
@@ -41,7 +41,7 @@ namespace Aqua.Runtime
         {
             AquaTransform result = new();
             result.m_localToWorldMatrix = matrix * transform.m_localToWorldMatrix;
-            Debug.Assert(Matrix4x4.Inverse3DAffine(result.m_localToWorldMatrix, ref result.m_worldToLocalMatrix));
+            Matrix4x4.Inverse3DAffine(result.m_localToWorldMatrix, ref result.m_worldToLocalMatrix);
 
             return result;
         }

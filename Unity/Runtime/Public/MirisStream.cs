@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace Aqua.Runtime
@@ -14,13 +15,13 @@ namespace Aqua.Runtime
         [SerializeField, Tooltip("Non-optional. The MirisStreamController governing this object.")]
         public MirisStreamController m_streamController;
 
-        [SerializeField, Tooltip("The URL to stream from.")]
-        public string m_url = "";
+        [Tooltip("The ID of the asset to be streamed.")]
+        public string m_assetId = "";
 
         /// <summary>
-        /// Tracks the previous URL to handle changes 
+        /// Tracks the previous asset id to handle changes 
         /// </summary>
-        private string m_loadedUrl = "";
+        private string m_loadedAssetId = "";
 
         // Associated scene object.
         [NonSerialized]
@@ -43,56 +44,6 @@ namespace Aqua.Runtime
         }
 
         #region Public API
-        /// <summary>
-        /// Sets a new URL to stream from. If this script is enabled, on the 
-        /// next Update loop, the previous content will be unloaded, and the 
-        /// new content loaded.
-        /// </summary>
-        /// <param name="contentPath">New URL or content path to load from</param>
-        /// <param name="experimentalPath">Miris-internal parameter</param>
-        public void SetUrlFromContentPath(string contentPath, bool experimentalPath = false)
-        {
-            Debug.Assert(m_streamController != null);
-
-            if (contentPath != "")
-            {
-                m_url = m_streamController.GetFormattedUrl(contentPath);
-            }
-            else
-            {
-                m_url = "";
-            }
-        }
-
-        /// <summary>
-        /// Uses the MirisStreamController to resolve the current content URL, 
-        /// expanding known variables.
-        /// See <see cref="MirisStreamController.ResolveUrl"/>
-        /// </summary>
-        /// <returns>The resolved, expanded URL</returns>
-        public string GetResolvedUrl()
-        {
-            return m_streamController.ResolveUrl(m_url);
-        }
-
-        /// <summary>
-        /// Clears the current content URL. If this script is enabled, on the 
-        /// next Update loop, the previous content will be unloaded.
-        /// </summary>
-        public void ClearUrl()
-        {
-            m_url = "";
-        }
-
-        /// <summary>
-        /// Reloads the current content URL. If this script is enabled, on the 
-        /// next Update loop, the current content will be re-loaded
-        /// </summary>
-        public void Reload()
-        {
-            m_loadedUrl = "";
-        }
-
         /// <summary>
         /// Validates whether the underlying AquaSceneObject is properly initialized
         /// </summary>
@@ -143,10 +94,10 @@ namespace Aqua.Runtime
         // --------------------------------------------------------------------
 
         #region MonoBehaviour
-        protected void OnEnable()
+        protected async void OnEnable()
         {
             RegisterController();
-            LoadStream();
+            await LoadStream();
         }
 
 
@@ -164,14 +115,14 @@ namespace Aqua.Runtime
             DeregisterController();
         }
 
-        protected void Update()
+        protected async void Update()
         {
             if (m_streamController == null)
             {
                 return;
             }
 
-            CheckUrlChanged();
+            await CheckContentChanged();
             foreach (var renderComponent in m_assetRootObjectIdToRenderComponent.Values)
             {
                 renderComponent.Update(transform);
@@ -191,48 +142,46 @@ namespace Aqua.Runtime
         // --------------------------------------------------------------------
 
         /// <summary>
-        /// Loads the content at m_url into the current stream.
+        /// Loads the content with id m_assetId into the current stream.
         /// </summary>
-        private void LoadStream()
+        protected virtual async Task LoadStream()
         {
             Debug.Assert(m_streamController != null);
 
-            if (m_url == "")
+            if (string.IsNullOrEmpty(m_assetId))
             {
-                Debug.Log("Got empty URL, aborting");
+                Debug.Log("No Asset Id specified, aborting");
                 return;
             }
 
-            string resolvedUrl = GetResolvedUrl();
-            Debug.Log($"Loading stream at {resolvedUrl}");
-            m_streamController.AddStream(this, resolvedUrl);
-            m_loadedUrl = resolvedUrl;
+            Debug.Log($"Loading stream with asset {m_assetId}");
+            m_loadedAssetId = m_assetId;
+            await m_streamController.AddStreamById(this, m_assetId);
         }
 
         /// <summary>
         /// Unloads content in the current MirisStreamController
         /// </summary>
-        private void UnloadStream()
+        protected virtual void UnloadStream()
         {
             if (IsLoaded() && m_streamController != null)
             {
                 ClearRenderResources();
                 m_streamController.RemoveStream(this);
-                m_loadedUrl = "";
             }
+            m_loadedAssetId = "";
         }
 
         /// <summary>
-        /// Checks whether the content URL has changed, and reloads the
+        /// Checks whether the asset id has changed, and reloads the
         /// MirisStreamController if so.
         /// </summary>
-        private void CheckUrlChanged()
+        protected virtual async Task CheckContentChanged()
         {
-            string resolvedUrl = GetResolvedUrl();
-            if (resolvedUrl != m_loadedUrl)
+            if (m_assetId != m_loadedAssetId)
             {
                 UnloadStream();
-                LoadStream();
+                await LoadStream();
             }
         }
 

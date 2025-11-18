@@ -5,6 +5,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 // Unity engine
 using UnityEngine;
@@ -255,6 +256,36 @@ namespace Aqua.Runtime
             m_scene.SetXRFloorHeight(m_xrUtils.GetXRFloorHeight(m_cameraOffset));
 
             AquaSceneObject streamObject = m_scene.AddStream(stream.name, url, doNotRefine: IsEditMode);
+
+            // Track the stream object.
+            int sceneObjectId = streamObject.GetId();
+            m_streamToSceneObjectId.Add(stream, sceneObjectId);
+            m_streamToAssetRootObjectIds.Add(stream, new());
+            m_streamObjectIdToMirisStream.Add(sceneObjectId, stream);
+            m_streamObjectIds.Add(sceneObjectId);
+
+            // Assign Stream Object to Miris Stream component.
+            stream.m_sceneObject = streamObject;
+        }
+
+        /// <summary>
+        /// This is the same as AddStream but using uuid. Eventually, this should replace AddStream.
+        /// </summary>
+        /// <param name="stream"></param>
+        /// <param name="uuid"></param>
+        public async Task AddStreamById(MirisStream stream, string uuid)
+        {
+            // Update flags.
+            m_updateRenderableObjects = true;
+            m_loadedMetadata = false;
+
+            // Update XR State 
+            // TODO: This is Miris Player specific behavior and shoulud be re-factored as such.
+            m_scene.SetXRFloorHeight(m_xrUtils.GetXRFloorHeight(m_cameraOffset));
+
+            AquaSceneObject streamObject = await m_scene.AddStreamById(stream.name, uuid, doNotRefine: IsEditMode);
+
+            Debug.Log($"Got stream object {streamObject}");
 
             // Track the stream object.
             int sceneObjectId = streamObject.GetId();

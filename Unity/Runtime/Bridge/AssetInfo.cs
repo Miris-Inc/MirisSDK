@@ -17,6 +17,14 @@ namespace Aqua.Runtime {
 #endif
     public struct AssetInfo
     {
+        // Asset uuid
+#if __cplusplus
+        char m_uuid[64] = {0};
+#else
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)]
+        public string m_uuid;
+#endif
+
         // Asset name
 #if __cplusplus
         char m_name[256] = {0};
