@@ -98,15 +98,17 @@ namespace Aqua.Editor
         [InitializeOnLoadMethod]
         private static void DownloadAllPackages()
         {
-            if(Directory.Exists(MirisFolder) || EditorPrefs.GetBool(StartupWindow.DoNotAutoDownloadPrefsKey))
-                return;
             var packageVersion = GetPackageVersion();
             if (string.IsNullOrEmpty(packageVersion))
                 throw new Exception("There was an issue trying to confirm the correct version of the Miris package.");
             tag = $"library@v{packageVersion}";
-            LoadReleaseByTag();
-            SetAllPlatformsAsSelected(true);
-            InstallSelected();
+            
+            // Todo: Once the repo is public, allow auto downloads
+            //if(Directory.Exists(MirisFolder) || EditorPrefs.GetBool(StartupWindow.DoNotAutoDownloadPrefsKey))
+            //    return;
+            //LoadReleaseByTag();
+            //SetAllPlatformsAsSelected(true);
+            //InstallSelected();
         }
 #endif
 
