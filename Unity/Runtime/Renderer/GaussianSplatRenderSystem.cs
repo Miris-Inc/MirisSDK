@@ -1,6 +1,5 @@
 // Standard library
 
-using System;
 using System.Collections.Generic;
 
 // Unity Engine
@@ -13,21 +12,8 @@ using UnityEngine.Experimental.Rendering;
 using Unity.Profiling;
 using UnityEngine.XR;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
-    public class FarFieldCachePlane
-    {
-        public Material material;
-        
-        public RenderTexture renderTexture;
-
-        public float renderTargetResolutionProportion = 0.0f;
-
-        public float splatsInCacheProportion = 0.0f;
-        
-        public float planeDistance = -1;
-    }
-    
     // GaussianSplatRenderSystem registers all the GaussianSplatRenderComponent(s) in a scene
     // to render them as part of a single pass.
     //
@@ -70,23 +56,11 @@ namespace Aqua.Runtime
         private XRUtils m_xrUtils = new XRUtils();
         private RenderTextureDescriptor m_xrTextureDescriptor;
 
-        // Far field rendering
-
-        // Whether to even use a far field
-        public bool farFieldEnabled;
-
-        private List<FarFieldCachePlane> m_farFieldCachePlanes = new();
-
-        private Shader m_farFieldPlaneShader;
-        
-        public FarFieldDistanceMode farFieldDistanceMode = FarFieldDistanceMode.Dynamic;
-
         // For binding shaders parameters.
         private static class ShaderIds
         {
             public static readonly int GaussianSplatRT = Shader.PropertyToID("_GaussianSplatRT");
 
-            public static readonly int FarFieldTex = Shader.PropertyToID("_MainTex");
             public static readonly int TanTheta = Shader.PropertyToID("_TanTheta");
             public static readonly int AspectRatio = Shader.PropertyToID("_AspectRatio");
             public static readonly int ConstantSplatDistance = Shader.PropertyToID("_ConstantSplatDistance");
@@ -129,12 +103,12 @@ namespace Aqua.Runtime
 
         // Set-up system resources when registering a splat renderer for the first time in RegisterRenderer.
         private void CreateSystemResources() {
-            Debug.Log("Creating Gaussian splat render system resources");
+            MirisDebug.Log("Creating Gaussian splat render system resources");
 
             if (m_compositeShader == null) {
                 m_compositeShader = Resources.Load<Shader>("Shaders/CompositeGaussianSplats");
             }
-            Debug.Log("Creating composite material.");
+            MirisDebug.Log("Creating composite material.");
 
             m_compositeMaterial = new Material(m_compositeShader) { name = "GaussianSplatsCompositeMaterial" };
 
@@ -147,37 +121,16 @@ namespace Aqua.Runtime
             m_xrTextureDescriptor.graphicsFormat = GraphicsFormat.R8G8B8A8_UNorm;
 
             if (UsingBuiltinRenderPipeline()) {
-                Debug.Log("Installing Camera.onPreCull callback");
+                MirisDebug.Log("Installing Camera.onPreCull callback");
                 Camera.onPreCull += OnPreCullCamera;
             }
-
-            if(m_farFieldPlaneShader == null) {
-                m_farFieldPlaneShader = Resources.Load<Shader>("Shaders/FarFieldCache/FarFieldPlane");
-            }
-            
-            // We currently have two far field planes. In the future we may have more?
-            m_farFieldCachePlanes.Add(
-                new FarFieldCachePlane {
-                    material = new Material(m_farFieldPlaneShader) { 
-                        name = "FarFieldPlaneMaterialOne", 
-                        renderQueue = (int)RenderQueue.Transparent + 100 
-                    }
-                });
-            m_farFieldCachePlanes.Add(
-                new FarFieldCachePlane {
-                    material = new Material(m_farFieldPlaneShader)
-                    {
-                        name = "FarFieldPlaneMaterialTwo",
-                        renderQueue = (int)RenderQueue.Transparent + 200
-                    }
-                });
         }
 
         // Called from UnregisterRenderer when all splat renderers have been unregistered,
         // for destroying system resources.
         private void DestroySystemResources()
         {
-            Debug.Log("Destroying Gaussian splat render system resources");
+            MirisDebug.Log("Destroying Gaussian splat render system resources");
 
             // Un-register commandBuffer from camera(s)
             if (m_cameraHasCommandBuffer != null)
@@ -188,7 +141,7 @@ namespace Aqua.Runtime
                     {
                         if (camera != null)
                         {
-                            Debug.Log("Removing command buffer from camera " + camera.gameObject.name);
+                            MirisDebug.Log("Removing command buffer from camera " + camera.gameObject.name);
                             camera.RemoveCommandBuffer(CameraEvent.BeforeForwardAlpha, m_commandBuffer);
                         }
                     }
@@ -208,18 +161,9 @@ namespace Aqua.Runtime
             if (UsingBuiltinRenderPipeline())
             {
                 // Un-register camera callback.
-                Debug.Log("Uninstalling Camera.OnPreCull callback");
+                MirisDebug.Log("Uninstalling Camera.OnPreCull callback");
                 Camera.onPreCull -= OnPreCullCamera;
             }
-
-            foreach (var cachePlane in m_farFieldCachePlanes) {
-                cachePlane.renderTexture?.Release();
-                cachePlane.renderTexture = null;
-            }
-
-            m_farFieldCachePlanes = new();
-            
-            m_farFieldPlaneShader = null;
         }
 
         private CommandBuffer GetInitialCommandBuffer(Camera camera)
@@ -231,7 +175,7 @@ namespace Aqua.Runtime
             if (UsingBuiltinRenderPipeline() && camera != null && !m_cameraHasCommandBuffer.Contains(camera))
             {
                 // The command buffer will be executed before the camera begins rendering transparent objects.
-                Debug.Log("Installing command buffer camera " + camera.gameObject.name);
+                MirisDebug.Log("Installing command buffer camera " + camera.gameObject.name);
                 camera.AddCommandBuffer(CameraEvent.BeforeForwardAlpha, m_commandBuffer);
                 m_cameraHasCommandBuffer.Add(camera);
             }
@@ -253,7 +197,7 @@ namespace Aqua.Runtime
 
                 CommandBuffer commandBuffer = GetInitialCommandBuffer(camera);
                 // send an callback on the render thread to the native plugin
-                commandBuffer.IssuePluginEvent(AquaUnityApi.GetRenderEventCallbackPtr(), 0);
+                commandBuffer.IssuePluginEvent(MirisApi.GetRenderEventCallbackPtr(), 0);
                 ProcessComponents(camera);
                 Render(camera, commandBuffer);
             }
@@ -294,31 +238,6 @@ namespace Aqua.Runtime
         }
 
         public void Render(Camera camera, CommandBuffer commandBuffer) {
-            var isRenderingToFirstEye = camera.stereoActiveEye is Camera.MonoOrStereoscopicEye.Left or Camera.MonoOrStereoscopicEye.Mono;
-            if (isRenderingToFirstEye) {
-                if (farFieldEnabled) {
-                    ResizeFarFieldCacheTextures(camera);
-
-                    var theta = Mathf.Deg2Rad * camera.fieldOfView * 0.5f;
-                    var tanTheta = Mathf.Tan(theta);
-
-                    foreach (var farFieldPlane in m_farFieldCachePlanes) {
-                        farFieldPlane.material.SetTexture(ShaderIds.FarFieldTex, farFieldPlane.renderTexture);
-                        farFieldPlane.material.SetFloat(ShaderIds.TanTheta, tanTheta);
-                        farFieldPlane.material.SetFloat(ShaderIds.AspectRatio, camera.aspect);
-                        farFieldPlane.material.SetFloat(ShaderIds.ConstantSplatDistance, 
-                            farFieldDistanceMode == FarFieldDistanceMode.Constant ? farFieldPlane.planeDistance : -1);
-                    }
-
-                }
-                else {
-                    foreach (var farFieldPlane in m_farFieldCachePlanes) {
-                        farFieldPlane.renderTexture?.Release();
-                        farFieldPlane.renderTexture = null;
-                    }
-                }
-            }
-
             if (UsingBuiltinRenderPipeline()) {
                 RenderUsingBuiltinPipeline(camera, commandBuffer);
                 return;
@@ -326,56 +245,6 @@ namespace Aqua.Runtime
 
             foreach (GaussianSplatRenderComponent component in m_activeComponents) {
                 component.Render(camera, commandBuffer);
-
-                // okay so
-                // We have one far field plane. We have 1 - many gaussian splat render components
-                // Nick is doing some work to unify rendering - rather than each component rendering itself, they'll all
-                // submit splats to the main render system for unified sorting and blending
-                // Rather than try to make everything work perfectly with the current architecture, I'm making things
-                // work vaguely well with the current architecture, with the hope of revisiting this when Nick's changes
-                // land. This will let us prove out the far field without duplicating a lot of work
-                
-                foreach(var farFieldPlane in m_farFieldCachePlanes) {
-                    component.SetFarFieldParameters(farFieldPlane.material);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Ensures that the far field texture is the correct resolution given our settings, and sets it as the far
-        /// field material's texture
-        /// </summary>
-        /// <param name="camera">Camera that the texture resolution is relative to</param>
-        private void ResizeFarFieldCacheTextures(Camera camera) {
-            // Ignore the UI camera just in case
-            if (camera.cameraType != CameraType.SceneView && camera != Camera.main) {
-                return;
-            }
-
-            foreach (var farFieldPlane in m_farFieldCachePlanes) {
-                EnsureRenderTargetSize(farFieldPlane);
-            }
-            
-            return;
-
-            void EnsureRenderTargetSize(FarFieldCachePlane farFieldPlane) {
-                var desiredResolution = new Vector2Int(
-                    (int)(camera.pixelRect.width * farFieldPlane.renderTargetResolutionProportion), 
-                    (int)(camera.pixelRect.height * farFieldPlane.renderTargetResolutionProportion)
-                    );
-                desiredResolution = Vector2Int.Max(desiredResolution, new Vector2Int(16, 16));
-
-                var curResolution = new Vector2Int();
-                if (farFieldPlane.renderTexture) {
-                    curResolution.Set(farFieldPlane.renderTexture.width, farFieldPlane.renderTexture.height);
-                }
-
-                if (curResolution != desiredResolution) {
-                    Debug.Log($"Current far field resolution : {curResolution}. Desired far field resolution: {desiredResolution}. Reallocating far field texture");
-                    // Recreate the texture
-                    farFieldPlane.renderTexture?.Release();
-                    farFieldPlane.renderTexture = new RenderTexture(desiredResolution.x, desiredResolution.y, 0, GraphicsFormat.R8G8B8A8_UNorm);
-                }
             }
         }
 
@@ -416,20 +285,6 @@ namespace Aqua.Runtime
                 {
                     component.Render(camera, commandBuffer);
                     component.UpdateCompositePass(m_compositeMaterial);
-                    
-                    // Duplicated because we have a BIRP and URP code path (for now)
-
-                    // okay so
-                    // We have one far field plane. We have 1 - many gaussian splat render components
-                    // Nick is doing some work to unify rendering - rather than each component rendering itself, they'll all
-                    // submit splats to the main render system for unified sorting and blending
-                    // Rather than try to make everything work perfectly with the current architecture, I'm making things
-                    // work vaguely well with the current architecture, with the hope of revisiting this when Nick's changes
-                    // land. This will let us prove out the far field without duplicating a lot of work
-                    
-                    foreach(var farFieldPlane in m_farFieldCachePlanes) {
-                        component.SetFarFieldParameters(farFieldPlane.material);
-                    }
                 }
                 m_commandBuffer.EndSample(s_renderMarker);
             }
@@ -453,33 +308,6 @@ namespace Aqua.Runtime
                 m_commandBuffer.ReleaseTemporaryRT(ShaderIds.GaussianSplatRT);
                 m_commandBuffer.EndSample(s_compositeMarker);
             }
-        }
-
-        public Material GetCachePlaneMaterial(int cachePlaneIndex) {
-            return m_farFieldCachePlanes[cachePlaneIndex].material;
-        }
-
-        // Returns true if the far field flag is enabled, and if there's more than 0 splats in the far field
-        public bool IsFarFieldActive() {
-            var areAnyTexturesNonZero = false;
-            foreach (var plane in m_farFieldCachePlanes) {
-                areAnyTexturesNonZero |= plane.renderTargetResolutionProportion > 0;
-            }
-            return farFieldEnabled && areAnyTexturesNonZero;
-        }
-
-        public List<FarFieldCachePlane> GetCachePlanes() {
-            return m_farFieldCachePlanes;
-        }
-
-        public float GetSplatsInNearFieldProportion() {
-            var proportion = 1.0f;
-
-            foreach (var cachePlane in m_farFieldCachePlanes) {
-                proportion -= cachePlane.splatsInCacheProportion;
-            }
-            
-            return MathF.Max(proportion, 0.0f);
         }
     }
 }

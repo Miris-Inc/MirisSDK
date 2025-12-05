@@ -7,7 +7,7 @@ using UnityEngine.Rendering;
 // Unity packages
 using Unity.Collections;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     // Helper class with methods for for debugging GPU data.
     public class GpuDebug
@@ -23,7 +23,7 @@ namespace Aqua.Runtime
                 {
                     text += array[i] + ((i + 1) < array.Length ? ", " : "]");
                 }
-                Debug.Log($"{bufferName} (size={array.Length}): " + text);
+                MirisDebug.Log($"{bufferName} (size={array.Length}): " + text);
             });
         }
     }

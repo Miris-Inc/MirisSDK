@@ -1,11 +1,11 @@
 using System.Collections.Generic;
-using Aqua.Runtime;
+using Miris.Runtime;
 using UnityEngine;
 
 using UnityEditor.PackageManager;
 
 
-namespace Aqua.Editor
+namespace Miris.Editor
 {
     public class PackageUtils
     {

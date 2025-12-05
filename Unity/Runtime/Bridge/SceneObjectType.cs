@@ -7,7 +7,7 @@
 #endif 
 
 #if USING_CSHARP
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
 #endif
 
@@ -16,11 +16,11 @@ public enum class SceneObjectType
 #else
 public enum SceneObjectType 
 #endif
-{ AssetRootObject, SceneObject, StreamObject, GaussianSplats, LodCollection, PointsObject, TeleportArea, Camera };
+{ AssetRootObject, SceneObject, StreamObject, GaussianSplats, LodCollection, PointsObject, Camera };
 
 
 #if USING_CSHARP
-} // Aqua.Runtime
+} // Miris.Runtime
 #else
 ;
 #undef public

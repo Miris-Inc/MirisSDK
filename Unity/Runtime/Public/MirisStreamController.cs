@@ -6,6 +6,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.IO;
 
 // Unity engine
 using UnityEngine;
@@ -13,9 +14,7 @@ using UnityEngine;
 // Unity packages
 using Unity.Profiling;
 
-// The functionality in this file is subject to change as the scene API evolves.
-
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     /// <summary>
     /// MirisStreamController streams an Aqua Scene into the Unity scene graph.
@@ -24,11 +23,6 @@ namespace Aqua.Runtime
     [ExecuteInEditMode]
     public class MirisStreamController : MonoBehaviour
     {
-        [SerializeField, Tooltip("Used to set the initial XR floor height, and should be the Main Scene Camera.")]
-        private GameObject m_cameraOffset;
-        [SerializeField]
-        private GameObject m_cameraOriginObject;
-
         [NonSerialized]
         public bool m_loadedMetadata = false;
 
@@ -45,7 +39,7 @@ namespace Aqua.Runtime
             m_lowestLodLimit = 0.0f,
             m_lodMaxDistance = 20.0f,
             m_verticalOffset = 0.0f,
-            m_spawnBehavior = AssetSpawnBehavior.CameraOriented,
+            m_splatCountBudget = 1000000,
         };
 
         [SerializeField]
@@ -61,14 +55,15 @@ namespace Aqua.Runtime
             m_lodMaxDistance = 20.0f,
             m_lodUpdateDistance = 5.0f,
             m_lodUpdateRotation = 20.0f,
-            m_fixedLodIndex = 10
+            m_fixedLodIndex = 10,
+            m_splatCountBudget = 1000000
         };
 
-        // Pointer to native scene object.
-        private AquaScene m_scene = new();
-
-        // Pointer to native timeline object.
-        private AquaTimeline m_timeline = new();
+        // Client instance and API helpers
+        private Client m_client;
+        private Scene m_scene;
+        private Timeline m_timeline;
+        private AssetManager m_assetManager;
 
         // Tracks the available MirisStreams in the current Unity scene.
         private Dictionary<MirisStream, int> m_streamToSceneObjectId = new();
@@ -100,23 +95,13 @@ namespace Aqua.Runtime
         [Tooltip("Amount of time to fully fade in / out a particular tile.  Set this to 0 to disable the fade effect.")]
         public float m_fadeDurationSeconds = 0.3f;
 
-        public float m_sceneTransitionFadeDuration
-        {
-            get
-            {
-                return m_fadeDurationSeconds * 2.0f;
-            }
-        }
-
         // Tracks the coroutines responsible for transitioning LODs.
         private Dictionary<int, Coroutine> m_fadeCoroutines = new();
 
         // Lazily update the renderable objects only when data source's active state changes.
         private bool m_updateRenderableObjects = false;
 
-        private AquaClientConfig m_clientConfig;
-
-        private XRUtils m_xrUtils = new XRUtils();
+        private ClientConfig m_clientConfig;
 
         public bool fadeLargeSplats
         {
@@ -147,77 +132,31 @@ namespace Aqua.Runtime
         // Public API
         // --------------------------------------------------------------------
 
-        // Get the fully resolved & addressable scene path after variable expansion.
-        public string ResolveUrl(string unresolvedUrl)
-        {
-            #if !MIRIS_INTERNAL
-            // For external builds, do not perform any variable expansion.
-            return unresolvedUrl;
-            #else
-            var replacements = new Dictionary<string, string>
-            {
-                {"devlocalhost", m_clientConfig.devlocalhost},
-                {"devlocalhost_fqdn", m_clientConfig.devlocalhost_fqdn},
-            };
-            return StringUtils.ExpandVars(unresolvedUrl, replacements);
-            #endif
-        }
-
-        // Get the version of the currently loaded asset
-        public string GetAssetVersion()
-        {
-            return m_sceneMetadata.m_version;
-        }
-
-        public AquaScene GetScene()
-        {
-            return m_scene;
-        }
-
-        public GameObject GetMainCameraObject()
-        {
-            return m_cameraOriginObject;
-        }
-
-        public void SetUpdateRenderableObjects(bool updateFlag)
-        {
-            m_updateRenderableObjects = updateFlag;
-        }
-
-        public string GetFormattedUrl(string contentPath)
-        {
-
-            if (!Uri.TryCreate(contentPath, UriKind.Absolute, out var uriResult) || !uriResult.IsAbsoluteUri)
-            {
-                return "";
-            }
-
-            return contentPath;
-        }
-
         public List<GaussianSplatRenderComponent> GetRenderComponents()
         {
             List<GaussianSplatRenderComponent> renderComponents = m_streamToSceneObjectId.Keys
-                .SelectMany(stream => stream.m_assetRootObjectIdToRenderComponent.Values)
+                .SelectMany(stream => stream.GetRenderComponents())
                 .ToList();
 
             return renderComponents;
         }
 
-
-        public void Initialize()
+        public Timeline GetTimeline()
         {
-            if (m_clientConfig != null)
-            {
-                // Already initialized.
-                return;
-            }
+            Debug.Assert(m_timeline != null);
+            return m_timeline;
+        }
 
-            m_clientConfig = AquaClientConfig.Load();
-            if (!string.IsNullOrWhiteSpace(m_clientConfig.asset_viewer_key))
-            {
-                AquaUnityApi.SetAssetViewerKey(m_clientConfig.asset_viewer_key);
-            }
+        public Client GetClient()
+        {
+            Debug.Assert(m_client != null);
+            return m_client;
+        }
+
+        public AssetManager GetAssetManager()
+        {
+            Debug.Assert(m_assetManager != null);
+            return m_assetManager;
         }
 
         // --------------------------------------------------------------------
@@ -232,18 +171,13 @@ namespace Aqua.Runtime
                 splatCount += renderComponent.GetSplatCount();
             }
 
-            AquaClient.RecordFrameInfo(splatCount);
-            AquaClient.SetLodRefinementParameters(m_lodRefinementParameters);
+            m_client.RecordFrameInfo(splatCount);
+            m_client.SetLodRefinementParameters(m_lodRefinementParameters);
         }
 
         // --------------------------------------------------------------------
         // Miris Stream management
         // --------------------------------------------------------------------
-
-        public bool HasStream(MirisStream stream)
-        {
-            return m_streamToSceneObjectId.ContainsKey(stream);
-        }
 
         public void AddStream(MirisStream stream, string url)
         {
@@ -251,11 +185,7 @@ namespace Aqua.Runtime
             m_updateRenderableObjects = true;
             m_loadedMetadata = false;
 
-            // Update XR State 
-            // TODO: This is Miris Player specific behavior and shoulud be re-factored as such.
-            m_scene.SetXRFloorHeight(m_xrUtils.GetXRFloorHeight(m_cameraOffset));
-
-            AquaSceneObject streamObject = m_scene.AddStream(stream.name, url, doNotRefine: IsEditMode);
+            SceneObject streamObject = m_scene.AddStream(stream.name, url, doNotRefine: IsEditMode);
 
             // Track the stream object.
             int sceneObjectId = streamObject.GetId();
@@ -273,19 +203,15 @@ namespace Aqua.Runtime
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="uuid"></param>
-        public async Task AddStreamById(MirisStream stream, string uuid)
+        internal async Task AddStreamById(MirisStream stream, string uuid)
         {
             // Update flags.
             m_updateRenderableObjects = true;
             m_loadedMetadata = false;
 
-            // Update XR State 
-            // TODO: This is Miris Player specific behavior and shoulud be re-factored as such.
-            m_scene.SetXRFloorHeight(m_xrUtils.GetXRFloorHeight(m_cameraOffset));
+            SceneObject streamObject = await m_scene.AddStreamById(stream.name, uuid, doNotRefine: IsEditMode);
 
-            AquaSceneObject streamObject = await m_scene.AddStreamById(stream.name, uuid, doNotRefine: IsEditMode);
-
-            Debug.Log($"Got stream object {streamObject}");
+            MirisDebug.Log($"Got stream object {streamObject}");
 
             // Track the stream object.
             int sceneObjectId = streamObject.GetId();
@@ -298,7 +224,7 @@ namespace Aqua.Runtime
             stream.m_sceneObject = streamObject;
         }
 
-        public void RemoveStream(MirisStream stream)
+        internal void RemoveStream(MirisStream stream)
         {
             // Stop associated coroutines (like fades)
             stream.StopAllCoroutines();
@@ -325,6 +251,12 @@ namespace Aqua.Runtime
             stream.m_sceneObject = null;
         }
 
+        public bool IsActive()
+        {
+            // Unfortunately we cannot rely on soely .isActiveAndEnabled :\
+            return isActiveAndEnabled && m_client != null;
+        }
+
         // --------------------------------------------------------------------
         // Unity scene management
         // --------------------------------------------------------------------
@@ -335,6 +267,8 @@ namespace Aqua.Runtime
             m_lodRefinementParameters.m_lodMaxDistance = m_sceneMetadata.m_lodMaxDistance;
             m_lodRefinementParameters.m_highestLodLimit = m_sceneMetadata.m_highestLodLimit;
             m_lodRefinementParameters.m_lowestLodLimit = m_sceneMetadata.m_lowestLodLimit;
+            m_lodRefinementParameters.m_splatCountBudget = m_sceneMetadata.m_splatCountBudget;
+
         }
 
         public void GetAssetMetadata()
@@ -359,7 +293,7 @@ namespace Aqua.Runtime
         {
             using (s_syncSceneMarker.Auto())
             {
-                using (AquaSceneChangeTracker changeTracker = new AquaSceneChangeTracker())
+                using (SceneChangeTracker changeTracker = new SceneChangeTracker(m_client))
                 {
                     if (!changeTracker.IsSceneLocked())
                     {
@@ -375,7 +309,7 @@ namespace Aqua.Runtime
                         stream.m_sceneObject.SetTransform(stream.transform.localToWorldMatrix);
                     }
 
-                    AquaSceneChangeTracker.Changes changes = changeTracker.GetSceneChanges();
+                    SceneChangeTracker.Changes changes = changeTracker.GetSceneChanges();
                     Populate(changes.m_changeIds.createdObjectIds);
                     SetObjectsDirty(changes.m_changeIds.modifiedObjectIds, changes.m_changeIds.modifiedObjectFlags);
 
@@ -409,14 +343,47 @@ namespace Aqua.Runtime
         }
 
         // --------------------------------------------------------------------
+        // Render Component Transform Calculation
+        // --------------------------------------------------------------------        
+        void UpdateRenderComponentTransform(int sceneObjectId)
+        {
+            SceneObject sceneObject = m_scene.GetSceneObject(sceneObjectId);
+            Matrix4x4 assetMatrix = sceneObject.GetTransform();
+
+            MirisStream stream = m_streamObjectIdToMirisStream.First(kv => m_scene.GetSceneObject(kv.Key).IsAncestorOf(sceneObjectId)).Value;
+            GaussianSplatRenderComponent renderComponent = stream.GetRenderComponent(sceneObjectId);
+            if(renderComponent != null){
+                SceneObject spawnOffsetObject = m_scene.GetSceneObject(sceneObject.GetParentId());
+                Matrix4x4 spawnOffsetMatrix = spawnOffsetObject.GetTransform();
+                if (assetMatrix.ValidTRS() && spawnOffsetMatrix.ValidTRS())
+                {
+                    renderComponent.m_assetMatrix = spawnOffsetMatrix * assetMatrix;
+                }
+            }
+        }
+
+
+
+        // --------------------------------------------------------------------
+        // Control temporary stall of render culling
+        // -------------------------------------------------------------------- 
+        public void ToggleRenderComponentCulling()
+        {
+            List<GaussianSplatRenderComponent> renderComponents = GetRenderComponents();
+            foreach (GaussianSplatRenderComponent renderComponent in renderComponents)
+            {
+                renderComponent.ToggleCulling();
+            }
+        }  
+
+        // --------------------------------------------------------------------
         // Scene object population
         // --------------------------------------------------------------------
-
         private void Populate(Span<int> createdObjectIds)
         {
             if (createdObjectIds.Length > 0)
             {
-                Debug.Log($"Populating {createdObjectIds.Length} scene objects");
+                MirisDebug.Log($"Populating {createdObjectIds.Length} scene objects");
             }
 
             foreach (int sceneObjectId in createdObjectIds)
@@ -427,25 +394,17 @@ namespace Aqua.Runtime
                     continue;
                 }
 
-                AquaSceneObject sceneObject = m_scene.GetSceneObject(sceneObjectId);
+                SceneObject sceneObject = m_scene.GetSceneObject(sceneObjectId);
                 SceneObjectType sceneObjectType = sceneObject.GetSceneObjectType();
 
                 // We handle the asset root object by initializing relevant data for the associated MirisStream
                 if (sceneObjectType == SceneObjectType.AssetRootObject)
                 {
-                    MirisStream stream = m_streamObjectIdToMirisStream.First(kv => new AquaSceneObject(kv.Key).IsAncestorOf(sceneObjectId)).Value;
+                    MirisStream stream = m_streamObjectIdToMirisStream.First(kv => m_scene.GetSceneObject(kv.Key).IsAncestorOf(sceneObjectId)).Value;
                     m_streamToAssetRootObjectIds[stream].Add(sceneObjectId);
                     m_assetRootObjectIdToDataSources[sceneObjectId] = new();
-
-                    GaussianSplatRenderComponent renderComponent = stream.CreateRenderComponent(sceneObjectId);
-
-                    Matrix4x4 assetRootMatrix = sceneObject.GetTransform();
-                    AquaSceneObject spawnOffsetObject = new AquaSceneObject(sceneObject.GetParentId());
-                    Matrix4x4 spawnOffsetMatrix = spawnOffsetObject.GetTransform();
-                    if (assetRootMatrix.ValidTRS() && spawnOffsetMatrix.ValidTRS())
-                    {
-                        renderComponent.m_assetMatrix = spawnOffsetMatrix * assetRootMatrix;
-                    }
+                    stream.CreateRenderComponent(sceneObjectId);
+                    UpdateRenderComponentTransform(sceneObjectId);
                 }
                 // Splat data is handled by creating a data source and associating it with the relevant MirisStream that contains it
                 else if (sceneObjectType == SceneObjectType.GaussianSplats)
@@ -457,7 +416,7 @@ namespace Aqua.Runtime
 
                     foreach (var (assetRootId, dataSources) in m_assetRootObjectIdToDataSources)
                     {
-                        if (new AquaSceneObject(assetRootId).IsAncestorOf(sceneObjectId))
+                        if (m_scene.GetSceneObject(assetRootId).IsAncestorOf(sceneObjectId))
                         {
                             dataSources.Add(data);
                             break;
@@ -484,6 +443,10 @@ namespace Aqua.Runtime
                         GaussianSplatDataSource data = m_splatObjectIdToDataSource[modifiedObjectId];
                         data.m_dirty = true;
                     }
+                    
+                }
+                if(changeFlags.HasFlag(SceneObjectModifyFlag.TRANSFORM)){
+                    UpdateRenderComponentTransform(modifiedObjectId);
                 }
             }
         }
@@ -498,7 +461,7 @@ namespace Aqua.Runtime
                 SceneObjectType sceneObjectType = m_scene.GetSceneObject(sceneObjectId).GetSceneObjectType();
                 if (sceneObjectType == SceneObjectType.GaussianSplats)
                 {
-                    MirisStream stream = m_streamObjectIdToMirisStream.First(kv => new AquaSceneObject(kv.Key).IsAncestorOf(sceneObjectId)).Value;
+                    MirisStream stream = m_streamObjectIdToMirisStream.First(kv => m_scene.GetSceneObject(kv.Key).IsAncestorOf(sceneObjectId)).Value;
                     StopFade(sceneObjectId, stream);
                     GaussianSplatDataSource dataSource = m_splatObjectIdToDataSource[sceneObjectId];
                     m_fadeCoroutines[sceneObjectId] = stream.StartCoroutine(FadeIn(dataSource));
@@ -515,12 +478,12 @@ namespace Aqua.Runtime
                     {
                         // If it was a newly created object that is starting out disabled, simply set its active state without fade out.
                         dataSource.m_active = false;
-                        SetUpdateRenderableObjects(true);
+                        m_updateRenderableObjects = true;
                     } 
                     else
                     {
                         // Otherwise, start the fade out
-                        MirisStream stream = m_streamObjectIdToMirisStream.First(kv => new AquaSceneObject(kv.Key).IsAncestorOf(sceneObjectId)).Value;
+                        MirisStream stream = m_streamObjectIdToMirisStream.First(kv => m_scene.GetSceneObject(kv.Key).IsAncestorOf(sceneObjectId)).Value;
                         StopFade(sceneObjectId, stream);
                         m_fadeCoroutines[sceneObjectId] = stream.StartCoroutine(FadeOut(dataSource));
                     }
@@ -541,11 +504,14 @@ namespace Aqua.Runtime
             m_scene.GetLodMinMaxIndices(out int minLodIndex, out int maxLodIndex);
 
             // Update the data sources of each render component.
-            foreach (MirisStream stream in m_streamToAssetRootObjectIds.Keys)
+            foreach (var pair in m_streamToAssetRootObjectIds)
             {
-                foreach ((int assetRootId, GaussianSplatRenderComponent renderComponent) in stream.m_assetRootObjectIdToRenderComponent)
+                MirisStream stream = pair.Key;
+                HashSet<int> assetRootIds = pair.Value;
+                foreach (int assetRootId in assetRootIds)
                 {
                     Debug.Assert(m_assetRootObjectIdToDataSources.ContainsKey(assetRootId));
+                    GaussianSplatRenderComponent renderComponent = stream.GetRenderComponent(assetRootId);
                 
                     var dataSources = m_assetRootObjectIdToDataSources[assetRootId];
                     if (dataSources.Count <= 0)
@@ -559,8 +525,6 @@ namespace Aqua.Runtime
                 }
             }
 
-            Debug.Log("Update Renderable Objects");
-
             m_updateRenderableObjects = false;
         }
         
@@ -568,7 +532,7 @@ namespace Aqua.Runtime
         {
             float fadeDuration = m_fadeDurationSeconds;
             dataSource.m_active = true;
-            SetUpdateRenderableObjects(true);
+            m_updateRenderableObjects = true;
 
             if (fadeDuration > 0.0)
             {
@@ -606,7 +570,7 @@ namespace Aqua.Runtime
             }
 
             dataSource.m_active = false;
-            SetUpdateRenderableObjects(true);
+            m_updateRenderableObjects = true;
         }
 
         private void StopFade(int sceneObjectId, MirisStream stream)
@@ -621,34 +585,48 @@ namespace Aqua.Runtime
         }
 
         // --------------------------------------------------------------------
-        // Unity event handling
+        // Initialization
         // --------------------------------------------------------------------
 
-        protected void OnEnable()
+        private void Initialize()
         {
-            Initialize();
-        }
-
-        private bool m_isApplicationQuitting = false;
-
-        public bool IsApplicationQuitting => m_isApplicationQuitting;
-
-        protected void OnApplicationQuit()
-        {
-            m_isApplicationQuitting = true;
-        }
-
-        protected void OnDisable()
-        {
-
-            if (m_isApplicationQuitting)
+            if (m_client != null)
             {
-                // During application quit, skip native calls as the client may already be destroyed
-                m_streamToSceneObjectId.Clear();
-                m_clientConfig = null;
                 return;
             }
 
+            // Initialize the client instance
+            m_client = new();
+            m_scene = new Scene(m_client);
+            m_timeline = new Timeline(m_client);
+            m_assetManager = new AssetManager(m_client);
+
+            // Initialize client config.
+            m_clientConfig = ClientConfig.Load();
+
+            // Seed the viewer key from config resource; it will be dynamically changed thereafter
+            string viewerKey = m_clientConfig.GetAssetViewerKey();
+            if (!string.IsNullOrWhiteSpace(viewerKey))
+            {
+                m_assetManager.SetViewerKey(viewerKey);
+            }
+
+            PreparePersistentDataDir(m_client);
+        }
+
+        static private void PreparePersistentDataDir(Client client)
+        {
+            string dirPath = Path.Combine(Application.persistentDataPath, "miris");
+            if (!Directory.Exists(dirPath))
+            {
+                Directory.CreateDirectory(dirPath);
+            }
+
+            client.SetPersistentDataDirectory(dirPath);
+        }
+
+        private void Teardown()
+        {
             // Normal cleanup path for non-quit scenarios (e.g., scene changes, disabling in editor)
             MirisStream[] streams = m_streamToSceneObjectId.Keys.ToArray();
             foreach (MirisStream stream in streams)
@@ -657,12 +635,35 @@ namespace Aqua.Runtime
             }
 
             m_streamToSceneObjectId.Clear();
+            m_clientConfig = null;
 
             m_scene?.Clear();
-            m_clientConfig = null;
+
+            // Teardown API objects
+            m_assetManager = null;
+            m_timeline = null;
+            m_scene = null;
+
+            // Teardown the client instance
+            m_client.Dispose();
+            m_client = null;
         }
 
-        void Start()
+        // --------------------------------------------------------------------
+        // Unity event handling
+        // --------------------------------------------------------------------
+
+        protected void OnEnable()
+        {
+            Initialize();
+        }
+
+        protected void OnDisable()
+        {
+            Teardown();
+        }
+
+        protected void Start()
         {
             // Initialize client & scene state
             m_scene.SetMainCameraTransform(Camera.main.transform.localToWorldMatrix);

@@ -12,7 +12,7 @@ using System;
 using System.Runtime.InteropServices;
 using UnityEngine;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
 #endif
 
@@ -36,6 +36,39 @@ namespace Aqua.Runtime
             m_modifiedObjectsCount = 0;
             m_activatedObjectsCount = 0;
             m_deactivatedObjectsCount = 0;
+        }
+
+        ~SceneChangeIds()
+        {
+            FreeArrays();
+        }
+
+        void FreeArrays()
+        {
+            delete[] m_createdObjectIds;     m_createdObjectIds = nullptr;
+            delete[] m_modifiedObjectIds;    m_modifiedObjectIds = nullptr;
+            delete[] m_modifiedObjectFlags;  m_modifiedObjectFlags = nullptr;
+            delete[] m_activatedObjectIds;   m_activatedObjectIds = nullptr;
+            delete[] m_deactivatedObjectIds; m_deactivatedObjectIds = nullptr;
+        }
+
+        void AllocateArrays()
+        {
+            FreeArrays();
+
+            if (m_createdObjectsCount > 0)
+                m_createdObjectIds = new int[m_createdObjectsCount];
+
+            if (m_modifiedObjectsCount > 0) {
+                m_modifiedObjectIds   = new int[m_modifiedObjectsCount];
+                m_modifiedObjectFlags = new int[m_modifiedObjectsCount];
+            }
+
+            if (m_activatedObjectsCount > 0)
+                m_activatedObjectIds = new int[m_activatedObjectsCount];
+
+            if (m_deactivatedObjectsCount > 0)
+                m_deactivatedObjectIds = new int[m_deactivatedObjectsCount];
         }
 #endif
 
@@ -120,7 +153,7 @@ namespace Aqua.Runtime
     };
 
 #if USING_CSHARP
-} // Aqua.Runtime
+} // Miris.Runtime
 #else
 
 #undef public

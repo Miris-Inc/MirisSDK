@@ -8,7 +8,7 @@
 
 #if USING_CSHARP
 using System.Runtime.InteropServices;
-namespace Aqua.Runtime {
+namespace Miris.Runtime {
 #endif
 
     // Provides information about the current game frame.

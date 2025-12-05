@@ -1,14 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Text;
 using UnityEditor;
 using UnityEditor.PackageManager;
 using UnityEngine;
 using UnityEngine.Networking;
-using System.IO.Compression;
 
-namespace Aqua.Editor
+namespace Miris.Editor
 {
     public class MirisReleaseDownloader : EditorWindow
     {
@@ -63,6 +63,8 @@ namespace Aqua.Editor
         }
 
         // Selection + discovered data
+        private static bool expressInstall = true;
+
         private static readonly Dictionary<Platform, bool> selected = new Dictionary<Platform, bool>
         {
             { Platform.windows, false },
@@ -135,13 +137,29 @@ namespace Aqua.Editor
                         : EditorGUILayout.TextField(new GUIContent("GitHub Token"), githubToken);
                 }
 
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    expressInstall = EditorGUILayout.ToggleLeft("Express Install", expressInstall, GUILayout.Width(120));
+                    EditorGUILayout.LabelField(new GUIContent("If checked, all compatible platforms will be installed."), EditorStyles.miniLabel);
+                }
+
                 using (new EditorGUI.DisabledScope(string.IsNullOrEmpty(owner) || string.IsNullOrEmpty(repo) || string.IsNullOrEmpty(tag)))
                 {
-                    if (GUILayout.Button("Load Release by Tag"))
+                    string label = $"Load Release {tag}";
+                    if (expressInstall)
+                    {
+                        label = $"Install {tag}";
+                    }
+                    
+                    if (GUILayout.Button(label))
                     {
                         LoadReleaseByTag();
                         // When this button is clicked, select all platforms by default
                         SetAllPlatformsAsSelected(true);
+                        if (expressInstall)
+                        {
+                            InstallSelected();
+                        }
                     }
                 }
             }
@@ -225,10 +243,17 @@ namespace Aqua.Editor
             using (new EditorGUILayout.VerticalScope("box"))
             {
                 EditorGUILayout.LabelField($"Release: {loadedRelease.tag_name}", EditorStyles.miniBoldLabel);
-                EditorGUILayout.Space(2);
 
-                DrawPlatformRow(Platform.windows, Platform.osx, Platform.android);
-                DrawPlatformRow(Platform.ios, Platform.linux, Platform.none);
+                EditorGUILayout.Space(2);
+                if (expressInstall)
+                {
+                    EditorGUILayout.LabelField("All compatible platforms will be installed.", EditorStyles.boldLabel);
+                }
+                else
+                {
+                    DrawPlatformRow(Platform.windows, Platform.osx, Platform.android);
+                    DrawPlatformRow(Platform.ios, Platform.linux, Platform.none);
+                }
 
                 EditorGUILayout.Space(2);
                 EditorGUILayout.LabelField($"Destination: {MirisFolder}", EditorStyles.miniLabel);
@@ -241,11 +266,11 @@ namespace Aqua.Editor
         {
             using (new EditorGUILayout.HorizontalScope())
             {
-                if(a != Platform.none)
+                if (a != Platform.none)
                     DrawPlatformToggle(a);
-                if(b != Platform.none)
+                if (b != Platform.none)
                     DrawPlatformToggle(b);
-                if(c != Platform.none)
+                if (c != Platform.none)
                     DrawPlatformToggle(c);
             }
         }
@@ -342,14 +367,14 @@ namespace Aqua.Editor
             {
                 EditorUtility.ClearProgressBar();
 
-                if(ex.Message.Contains("HTTP 401"))
+                if (ex.Message.Contains("HTTP 401"))
                 {
                     Debug.LogError($"[GithubReleaseDownloader] Load error: {ex.Message}\n{ex}");
                     EditorUtility.DisplayDialog("Unauthorized", "The GitHub API returned a 401 Unauthorized error. Double-check the permissions on your GitHub token, set a new one and try again.", "OK");
                     return;
                 }
 
-                if(ex.Message.Contains("HTTP 404"))
+                if (ex.Message.Contains("HTTP 404"))
                 {
                     Debug.LogError($"[GithubReleaseDownloader] Load error: {ex.Message}\n{ex}");
                     EditorUtility.DisplayDialog("Release Not Found", $"Release with tag '{tag}' not found in {owner}/{repo}. If the release definitely exists, try setting your GitHub Token and try again.", "OK");
@@ -421,9 +446,14 @@ namespace Aqua.Editor
         }
 
         // Install selected platforms
-        private static void InstallSelected()
+        private void InstallSelected()
         {
             EnsureMirisFolder();
+
+            if (expressInstall)
+            {
+                SetAllPlatformsAsSelected(true);
+            }
 
             var toDownload = new List<KeyValuePair<Platform, Asset>>();
             foreach (var kv in selected)

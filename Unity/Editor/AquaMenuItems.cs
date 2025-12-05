@@ -8,7 +8,7 @@ using System.Reflection;
 using UnityEditor.XR.Simulation;
 #endif
 
-namespace Aqua.Editor.Tools
+namespace Miris.Editor.Tools
 {
     /// <summary>
     /// Aqua Unity Editor menu items for developer tools and utilities

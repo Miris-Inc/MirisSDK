@@ -13,7 +13,7 @@ using UnityEngine.XR;
 using Unity.Profiling;
 using Unity.Profiling.LowLevel;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     /// <summary>
     /// PointRenderer performs rendering of gaussian splat centres as points through direct rasterization to a render texture.

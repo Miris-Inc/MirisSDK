@@ -1,11 +1,10 @@
 // Copyright © 2024 Miris. All rights reserved.
 
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     // Helper class for enqueing a buffer -> buffer copy on the GPU
     public class BufferCopier

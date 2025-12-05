@@ -9,7 +9,7 @@ using UnityEngine.Rendering.Universal;
 using UnityEngine.Rendering.RenderGraphModule;
 using UnityEngine.XR;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     
     class GaussianSplatRenderPass : ScriptableRendererFeature

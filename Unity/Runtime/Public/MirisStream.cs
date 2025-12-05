@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
 
     /// <summary>
@@ -25,27 +26,17 @@ namespace Aqua.Runtime
 
         // Associated scene object.
         [NonSerialized]
-        public AquaSceneObject m_sceneObject = null;
+        internal SceneObject m_sceneObject = null;
 
         // A stream can be composed of multiple assets. This map allows you to obtain the render component associated with an asset
         [NonSerialized]
-        public Dictionary<int, GaussianSplatRenderComponent> m_assetRootObjectIdToRenderComponent = new();
+        private Dictionary<int, GaussianSplatRenderComponent> m_assetRootObjectIdToRenderComponent = new();
 
-        // Convenience getter for the most frequent case where a stream has only 1 asset
-        public GaussianSplatRenderComponent m_renderComponent =>
-            m_assetRootObjectIdToRenderComponent.Count > 0 ? m_assetRootObjectIdToRenderComponent[0] : null;
-
-        public GaussianSplatRenderComponent CreateRenderComponent(int assetRootObjectId)
-        {
-            GaussianSplatRenderComponent renderComponent = new();
-            Debug.Assert(!m_assetRootObjectIdToRenderComponent.ContainsKey(assetRootObjectId));
-            m_assetRootObjectIdToRenderComponent.Add(assetRootObjectId, renderComponent);
-            return renderComponent;
-        }
+        public List<Action> m_onUnloadedActions = new List<Action>();
 
         #region Public API
         /// <summary>
-        /// Validates whether the underlying AquaSceneObject is properly initialized
+        /// Validates whether the underlying SceneObject is properly initialized
         /// </summary>
         /// <returns>True if the underlying m_sceneObject is non-null, false otherwise</returns>
         public bool IsLoaded()
@@ -87,6 +78,11 @@ namespace Aqua.Runtime
             return bounds;
         }
 
+        public GaussianSplatRenderComponent[] GetRenderComponents()
+        {
+            return m_assetRootObjectIdToRenderComponent.Values.ToArray();
+        }
+
         #endregion
 
         // --------------------------------------------------------------------
@@ -96,32 +92,28 @@ namespace Aqua.Runtime
         #region MonoBehaviour
         protected async void OnEnable()
         {
-            RegisterController();
-            await LoadStream();
+            if (m_streamController != null && m_streamController.isActiveAndEnabled)
+            {
+                // Only run this after MirisStreamController.OnEnable() has been called
+                await LoadStream();
+            }
         }
-
 
         protected void OnDisable()
         {
             ClearRenderResources();
 
-            // Skip cleanup if application is quitting - native client may already be destroyed
-            if (m_streamController != null && m_streamController.IsApplicationQuitting)
+            if (m_streamController != null && m_streamController.isActiveAndEnabled)
             {
-                return;
+                // Prevent this from being run if MirisStreamController.OnDisable() has been already called.
+                UnloadStream();
+                DeregisterController();
             }
-
-            UnloadStream();
-            DeregisterController();
         }
 
         protected async void Update()
         {
-            if (m_streamController == null)
-            {
-                return;
-            }
-
+            RegisterController();
             await CheckContentChanged();
             foreach (var renderComponent in m_assetRootObjectIdToRenderComponent.Values)
             {
@@ -150,11 +142,11 @@ namespace Aqua.Runtime
 
             if (string.IsNullOrEmpty(m_assetId))
             {
-                Debug.Log("No Asset Id specified, aborting");
+                MirisDebug.Log("No Asset Id specified, aborting");
                 return;
             }
 
-            Debug.Log($"Loading stream with asset {m_assetId}");
+            MirisDebug.Log($"Loading stream with asset {m_assetId}");
             m_loadedAssetId = m_assetId;
             await m_streamController.AddStreamById(this, m_assetId);
         }
@@ -170,6 +162,12 @@ namespace Aqua.Runtime
                 m_streamController.RemoveStream(this);
             }
             m_loadedAssetId = "";
+
+            // Invoke unloaded stream ballbacks
+            foreach (Action action in m_onUnloadedActions)
+            {
+                action.Invoke();
+            }
         }
 
         /// <summary>
@@ -208,9 +206,6 @@ namespace Aqua.Runtime
                     throw new UnityException($"Found {streamControllers.Length} MirisStreamControllers, please only have one in your scene.");
                 }
             }
-
-            Debug.Log($"Miris Stream '{name}' found Controller '{m_streamController.name}'");
-            m_streamController.Initialize();
         }
 
         /// <summary>
@@ -226,6 +221,18 @@ namespace Aqua.Runtime
             m_streamController = null;
         }
 
+        internal GaussianSplatRenderComponent CreateRenderComponent(int assetRootObjectId)
+        {
+            GaussianSplatRenderComponent renderComponent = new();
+            Debug.Assert(!m_assetRootObjectIdToRenderComponent.ContainsKey(assetRootObjectId));
+            m_assetRootObjectIdToRenderComponent.Add(assetRootObjectId, renderComponent);
+            return renderComponent;
+        }
+
+        internal GaussianSplatRenderComponent GetRenderComponent(int assetRootObjectId)
+        {
+            return m_assetRootObjectIdToRenderComponent[assetRootObjectId];
+        }
 
         private void ClearRenderResources()
         {

@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 using UnityEditor;
 
-namespace Aqua.Editor
+namespace Miris.Editor
 {
     // Match target platforms enumerated in $AQUA_ROOT/aqua_cmd.py
     // Also see GetUnityBuildTarget()

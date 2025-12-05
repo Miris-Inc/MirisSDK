@@ -12,19 +12,10 @@ using System;
 using System.Runtime.InteropServices;
 using UnityEngine;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
 #endif
 
-
-
-    #if __cplusplus
-        public enum class AssetSpawnBehavior : int 
-    #else
-        public enum AssetSpawnBehavior : int
-    #endif
-
-    { CameraOriented = 0, Absolute = 1, FloorAnchored = 2 };
 
     // Developer Note:
     //
@@ -51,7 +42,7 @@ namespace Aqua.Runtime
         , m_lowestLodLimit(0.0f)
         , m_lodMaxDistance(20.0f)
         , m_verticalOffset(0.0f)
-        , m_spawnBehavior(AssetSpawnBehavior::Absolute)
+        , m_splatCountBudget(1000000)
         {
             std::memset(m_version, 0, sizeof(m_version));
         }
@@ -60,7 +51,7 @@ namespace Aqua.Runtime
             m_lowestLodLimit = 0.0f;
             m_lodMaxDistance = 20.0f;
             m_verticalOffset = 0.0f;
-            m_spawnBehavior = AssetSpawnBehavior::CameraOriented;
+            m_splatCountBudget = 1000000;
             std::memset(m_version, 0, sizeof(m_version));
         }
 
@@ -77,7 +68,7 @@ namespace Aqua.Runtime
         public float m_lowestLodLimit;
         public float m_lodMaxDistance;
         public float m_verticalOffset;
-        public AssetSpawnBehavior m_spawnBehavior;
+        public int m_splatCountBudget;
 
     };
 
@@ -118,7 +109,7 @@ namespace Aqua.Runtime
 
 
 #if USING_CSHARP
-} // Aqua.Runtime
+} // Miris.Runtime
 #else
 
 #undef public

@@ -1,4 +1,4 @@
-using Aqua.Runtime;
+using Miris.Runtime;
 
 using UnityEditor;
 using UnityEngine;
@@ -8,7 +8,7 @@ using System;
 using System.Linq;
 using System.IO;
 
-namespace Aqua.Editor
+namespace Miris.Editor
 {
     /// <summary>
     /// The startup window for the Miris SDK. This window is opened by 
@@ -20,6 +20,7 @@ namespace Aqua.Editor
     {
         public static string DoNotShowAgainPrefsKey = "MirisStartup_DoNotShowAgain";
         public static string DoNotAutoDownloadPrefsKey = "MirisStartup_DoNotAutoDownloadBinaries";
+        
         private static string _welcome_message =
             "The Miris Unity SDK is currently in a pre-alpha state, but feel free to look around.";
         private static string _asset_key_message =
@@ -84,11 +85,15 @@ namespace Aqua.Editor
         }
         #endregion
 
-        void OnGUI()
+        #region Unity Lifecycle
+        void OnEnable()
         {
             m_doNotShowAgain = EditorPrefs.GetBool(DoNotShowAgainPrefsKey, false);
             m_doNotAutoDownloadBinaries = EditorPrefs.GetBool(DoNotAutoDownloadPrefsKey, false);
-
+        }
+        
+        void OnGUI()
+        {
             // TODO: Show SDK Version
             #region Welcome Section
             GUILayout.Label("Welcome", EditorStyles.boldLabel);
@@ -101,20 +106,24 @@ namespace Aqua.Editor
             GUILayout.BeginHorizontal();
             GUILayout.Label(_welcome_message, wordWrap);
             GUILayout.EndHorizontal();
-
+            
+            #if !MIRIS_INTERNAL
             GUILayout.BeginHorizontal();
             GUILayout.Label(_asset_key_message, wordWrap);
             GUILayout.EndHorizontal();
+            #endif
 
+            #if !MIRIS_INTERNAL
             GUILayout.BeginHorizontal();
             m_assetViewerKey = EditorGUILayout.TextField("", m_assetViewerKey);
             if (GUILayout.Button("Apply"))
             {
-                AquaClientConfig config = AquaClientConfig.Load();
+                ClientConfig config = ClientConfig.Load();
                 config.asset_viewer_key = m_assetViewerKey;
-                AquaClientConfig.Write(config);
+                ClientConfig.Write(config);
             }
             GUILayout.EndHorizontal();
+            #endif
 
             // TODO: Check for Updates button
             // TODO: Show changelog button
@@ -172,6 +181,7 @@ namespace Aqua.Editor
             }
             #endregion
         }
+        #endregion
     }
 
     /// <summary>
@@ -183,7 +193,8 @@ namespace Aqua.Editor
         static StartupWindowOpener()
         {
             // Do not show the window if it's already rendering
-            if (EditorWindow.HasOpenInstances<StartupWindow>())
+            // Or if running in batch mode
+            if (Application.isBatchMode || EditorWindow.HasOpenInstances<StartupWindow>())
             {
                 return;
             }

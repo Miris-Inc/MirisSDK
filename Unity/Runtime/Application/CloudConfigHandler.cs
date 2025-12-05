@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Networking;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     public static class CloudConfigHandler
     {

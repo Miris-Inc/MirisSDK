@@ -6,7 +6,7 @@ using System.Linq;
 using Unity.Collections;
 using UnityEngine;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     // GPUResourceTracker tracks which AttributeBuffers we have uploaded to the GPU
     // The track function should be called for each data source semantic, if the attributeBuffer
@@ -150,8 +150,35 @@ namespace Aqua.Runtime
                     Debug.LogWarning($"[GPUResourceTracker] will not be able to fit new upload data of {allocationSize} bytes within atlas buffer. Upload aborted.");
                 }
             }
-            else 
-            { 
+            else if (attributeBuffer.IsBlockCompressed())
+            {
+                int allocationSize = attributeBuffer.GetComponentCount() * sizeof(float) * attributeBuffer.GetSplatCount();
+                AllocateAtlasBufferIfNeeded(allocationSize);
+                int activeAtlasBufferIndex = GetActiveAtlasBufferIndex();
+                Debug.Assert(activeAtlasBufferIndex >= 0, $"activeAtlasBufferIndex is invalid");
+
+                if (m_atlasAllocators[activeAtlasBufferIndex].CanAllocate((UInt64)allocationSize))
+                {
+                    int allocationOffset = (int)m_atlasAllocators[activeAtlasBufferIndex].Allocate((UInt64)allocationSize);
+                    AtlasIndexEntry indexEntry = new AtlasIndexEntry();
+                    indexEntry.size = allocationSize;
+                    indexEntry.offset = allocationOffset;
+                    indexEntry.atlasBufferIndex = activeAtlasBufferIndex;
+                    m_resources.Add(hash, indexEntry);
+
+                    GpuTexture sourceBuffer = new("ASTC texture", attributeBuffer.GetTexture());
+                    var (minVec, maxVec) = attributeBuffer.GetMinMaxVectors();
+                    IGpuBuffer blockBoundsBuffer = attributeBuffer.GetBlockBoundsGpuBuffer();
+                    bool hasBlockBoundsBuffer = attributeBuffer.HasBlockBoundsBuffer();
+                    bufferConverter.EnqueueBufferConversion(sourceBuffer, m_atlasBuffers[activeAtlasBufferIndex], attributeBuffer.GetSplatCount(), attributeBuffer.GetComponentCount(), allocationOffset, allocationSize, minVec, maxVec, attributeBuffer.GetIsRangeNormalized(), attributeBuffer.GetBlockDim(), blockBoundsBuffer, hasBlockBoundsBuffer, attributeBuffer.IsBlockScanlineOrder());
+                }
+                else
+                {
+                    Debug.LogWarning($"[GPUResourceTracker] will not be able to fit new upload data of {allocationSize} bytes within atlas buffer. Upload aborted.");
+                }
+            }
+            else
+            {
                 m_buffersToUpload.Add(attributeBuffer);
             }
 

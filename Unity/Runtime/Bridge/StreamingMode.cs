@@ -7,7 +7,7 @@
 #endif 
 
 #if USING_CSHARP
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
 #endif
 
@@ -18,7 +18,7 @@ public enum StreamingMode
 }
 
 #if USING_CSHARP
-} // Aqua.Runtime
+} // Miris.Runtime
 #else
 ;
 #undef public 

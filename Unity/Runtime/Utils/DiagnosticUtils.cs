@@ -1,6 +1,6 @@
 using System;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     public class DiagnosticUtils
     {

@@ -1,8 +1,5 @@
 // Copyright © 2024 Miris. All rights reserved.
 
-using System.Collections;
-using System.Collections.Generic;
-
 // Unity engine
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -11,12 +8,9 @@ using UnityEngine.Experimental.Rendering;
 // Unity packages
 using Unity.Collections;
 using Unity.Profiling;
-using Unity.Profiling.LowLevel;
-using Unity.Collections.LowLevel.Unsafe;
 using System;
-using JetBrains.Annotations;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     // Provides abstraction around an underlying GPU resource (e.g. GraphicsBuffer or texture)
     public interface IGpuBuffer : IDisposable
@@ -258,29 +252,15 @@ namespace Aqua.Runtime
             }
         }
 
-        static private IGpuBuffer CreateSingleGpuBuffer(AttributeBuffer cpuBuffer, int bufferShaderId, int textureWidthShaderId, ref IGpuBuffer gpuBuffer, [CanBeNull] string name)
+        static private IGpuBuffer CreateSingleGpuBuffer(AttributeBuffer cpuBuffer, int bufferShaderId, int textureWidthShaderId, ref IGpuBuffer gpuBuffer, string name)
         {
             gpuBuffer?.Dispose();
 
             int blockDim = cpuBuffer.GetBlockDim();
 
-            if (cpuBuffer.IsTexture() && !cpuBuffer.IsGPUBuffer())
+            if (cpuBuffer.IsBlockCompressed() && !cpuBuffer.IsGPUBuffer())
             {
-                (int textureWidth, int textureHeight) = cpuBuffer.GetTextureSize();
-
-                GraphicsFormat graphicsFormat = cpuBuffer.GetEncoding().ToGraphicsFormat();
-
-                gpuBuffer = new GpuTexture(
-                    cpuBuffer.GetSemantic().ToString(),
-                    textureWidth,
-                    textureHeight,
-                    graphicsFormat,
-                    bufferShaderId,
-                    textureWidthShaderId,
-                    blockDim
-                );
-
-                gpuBuffer.SetData(cpuBuffer.GetArray());
+                gpuBuffer = new GpuArray(cpuBuffer.GetSplatCount() * sizeof(float) * cpuBuffer.GetComponentCount(), bufferShaderId, blockDim, name);
             }
             else
             {
@@ -311,9 +291,11 @@ namespace Aqua.Runtime
             for (int bufferIndex = 0; bufferIndex < cpuBuffers.Length; ++bufferIndex)
             {
                 var cpuBuffer = cpuBuffers[bufferIndex];
-                if (cpuBuffer.IsTexture())
+                blockDim = cpuBuffer.GetBlockDim();
+                if (cpuBuffer.IsBlockCompressed() && !cpuBuffer.IsGPUBuffer())
                 {
-                    throw new NotSupportedException("Aggregate GPU buffers not supported for textures");
+                    totalBytes += cpuBuffer.GetSplatCount() * sizeof(float) * cpuBuffer.GetComponentCount();
+                    continue;
                 }
                 else if (firstEncoding != cpuBuffer.GetEncoding())
                 {
@@ -322,7 +304,6 @@ namespace Aqua.Runtime
                         $"Expected {firstEncoding}, but cpuBuffer[{bufferIndex}] encoding is {cpuBuffer.GetEncoding()}"
                     );
                 }
-                blockDim = cpuBuffer.GetBlockDim();
                 totalBytes += cpuBuffer.GetTotalBytes();
             }
             

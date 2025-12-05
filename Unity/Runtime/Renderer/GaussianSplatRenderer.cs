@@ -1,22 +1,14 @@
 // Copyright © 2024 Miris. All rights reserved.
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
-using Unity.Collections;
 using UnityEngine;
-using UnityEngine.Assertions;
 using UnityEngine.Rendering;
 using UnityEngine.XR;
-
 using Unity.Profiling;
-using Unity.Profiling.LowLevel;
-using Unity.Mathematics;
-using UnityEditor;
-using UnityEngine.Experimental.Rendering;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     /// <summary>
     /// GaussianSplatRenderer is the base class for gaussian splat rendering.
@@ -194,7 +186,7 @@ namespace Aqua.Runtime
 
         public void UpdateResources(GaussianSplatDataSource[] dataSources)
         {
-            //Debug.Log($"[GaussianSplatsRenderer] Updating graphics resources for {dataSources.Length} data sources");
+            //MirisDebug.Log($"[GaussianSplatsRenderer] Updating graphics resources for {dataSources.Length} data sources");
 
             using (s_createResourcesBaseMarker.Auto())
             {
@@ -241,7 +233,7 @@ namespace Aqua.Runtime
                 CreateAndTrackGpuBuffer(dataSources,AttributeSemantic.SHCoefficients, ShaderIds.SHCoefficients, ShaderIds.SHCoefficientsTextureWidth, ref m_renderBuffers.m_gpuSHCoefficients, "shBuffer");
                 int lastShCount = m_shCount;
                 m_shCount = GetShCount(dataSources, AttributeSemantic.SHCoefficients);
-                if (lastShCount != m_shCount) Debug.Log($"[GaussianSplatRenderer] dataSource contains {m_shCount} SH coefficients.");
+                if (lastShCount != m_shCount) MirisDebug.Log($"[GaussianSplatRenderer] dataSource contains {m_shCount} SH coefficients.");
             }
 
             // Orientation
@@ -283,7 +275,7 @@ namespace Aqua.Runtime
             int currentDataSourceIndexSize = m_splatToDataSourceIndex.Length;
             if (currentDataSourceIndexSize < m_splatCount)
             {
-                Debug.Log($"[GaussianSplatRenderer] allocating space for {m_splatCount} dataSource index array items mapping {m_dataSourceCount} sources");
+                MirisDebug.Log($"[GaussianSplatRenderer] allocating space for {m_splatCount} dataSource index array items mapping {m_dataSourceCount} sources");
 
                 // allocate a new buffer for storing the dataSourceIndex map in 
                 // large chunks to avoid constant reallocations 
@@ -363,7 +355,7 @@ namespace Aqua.Runtime
 
                 int totalBytes = dataSources[0].GetBuffer(AttributeSemantic.SHCoefficients).GetTotalBytes();
                 int elementCount = dataSources[0].GetBuffer(AttributeSemantic.Position).GetElementCount();
-                int sizeOfCoefficients = dataSources[0].GetBuffer(AttributeSemantic.SHCoefficients).GetBytesPerElement() / 3;
+                int sizeOfCoefficients = dataSources[0].GetBuffer(AttributeSemantic.SHCoefficients).GetTotalBytes() / dataSources[0].GetBuffer(AttributeSemantic.SHCoefficients).GetElementCount() / 3;
 
                 coefficientsPerSplat = totalBytes / (elementCount * sizeOfCoefficients) / 3;
             }
@@ -571,10 +563,6 @@ namespace Aqua.Runtime
             {
                 computeShader.EnableKeyword(c_missingShCoefficientsKeyword);
             }
-        }
-
-        public virtual void SetFarFieldParameters(Material farFieldMaterial) {
-            throw new NotImplementedException();
         }
     }
 }

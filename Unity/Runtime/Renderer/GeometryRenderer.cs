@@ -1,8 +1,6 @@
 // Copyright © 2024 Miris. All rights reserved.
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.InteropServices;
 
 using UnityEngine;
@@ -15,7 +13,7 @@ using Unity.Mathematics;
 using UnityEngine.XR;
 
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     /// <summary>
     /// GeometryRenderer performs rendering of gaussian splats through the creation of geometry quads.
@@ -118,28 +116,8 @@ namespace Aqua.Runtime
 
         private GraphicsBuffer m_gpuDataSourceLodIndex;
 
-        // The data we need to render our splats into one of the far field's cache planes
-        private class CachePlaneData
-        {
-            // Index of the first splat to render to this cache plane
-            public int firstSplat;
-            
-            // Number of splats in this cache plane
-            public int splatCount;
-
-            // Output of the splats mapping shader
-            public ComputeBuffer mappedSplatsBuffer;
-        };
-        
-        // Number of splats in the near field - e.g. the number directly rendered  
-        private int m_splatsInNearFieldCount = 0;
-
-        // Data for each of the planes in the far field cache: first splat, splat counts, and the buffer that holds the
-        // mapped splats 
-        private List<CachePlaneData> m_cachePlaneDatas = new();
-
         // GPU splats in the near field. This buffer contains one entry per eye for each splat
-        private ComputeBuffer m_nearFieldGpuSplatBuffer = null;
+        private ComputeBuffer m_gpuSplatBuffer = null;
 
         // ---------------------------------------------------------
         // Scalars
@@ -210,10 +188,6 @@ namespace Aqua.Runtime
 
         static readonly ProfilerMarker s_map3DGSGpuMarker = new ProfilerMarker(
             ProfilerCategory.Render, s_profilerPrefix + "Map 3DGS (GPU)", MarkerFlags.SampleGPU
-        );
-
-        static readonly ProfilerMarker s_splitFarFieldMarker = new ProfilerMarker(
-            ProfilerCategory.Render, s_profilerPrefix + "Split far field splats", MarkerFlags.SampleGPU
         );
 
         // Symbol names used in the shaders.
@@ -418,7 +392,7 @@ namespace Aqua.Runtime
                         DisposeBuffer(ref m_sortedSplatDepth);
                         DisposeBuffer(ref m_sortedSplatIndex);
                         DisposeBuffer(ref m_indirectDrawBuffer);
-                        DisposeBuffer(ref m_nearFieldGpuSplatBuffer);
+                        DisposeBuffer(ref m_gpuSplatBuffer);
                         DisposeBuffer(ref m_gpuDataSourceLodIndex);
 
                         m_gpuSort?.Dispose();
@@ -459,90 +433,20 @@ namespace Aqua.Runtime
                 SortSplats(commandBuffer, camera, transform);
             }
 
-            var renderSystem = GaussianSplatRenderSystem.m_instance;
-            
-            var useFarField = renderSystem.IsFarFieldActive();
+            EnsureGpuSplatBufferHasCapacity(ref m_gpuSplatBuffer, m_splatCount * m_xrUtils.GetEyeCount());
 
-            // Split the splats into far field and near field. Render the far field to a texture, then render the near
-            // field normally. Farther-away splats appear later in the buffer, so for the near field we draw the front
-            // of the buffer
-
-            var cachePlanes = renderSystem.GetCachePlanes();
-
-            m_splatsInNearFieldCount = m_splatCount;
-            
-            // Initialize the data for the far field's cache planes
-            if (useFarField) {
-                m_splatsInNearFieldCount = (int)(m_splatCount * renderSystem.GetSplatsInNearFieldProportion());
-                var curFieldStart = m_splatsInNearFieldCount;
-                
-                while (m_cachePlaneDatas.Count < cachePlanes.Count) {
-                    m_cachePlaneDatas.Add(new());
-                }
-                for (var i = 0; i < cachePlanes.Count; i++) {
-                    var cachePlaneDefinition = cachePlanes[i];
-                    var cachePlaneData = m_cachePlaneDatas[i];
-
-                    cachePlaneData.firstSplat = curFieldStart;
-                    cachePlaneData.splatCount = (int)(cachePlaneDefinition.splatsInCacheProportion * m_splatCount);
-                    EnsureGpuSplatBufferHasCapacity(ref cachePlaneData.mappedSplatsBuffer, cachePlaneData.splatCount);
-
-                    if (isRenderingToFirstEye && cachePlaneData.splatCount > 0) {
-                        // Map the splats in the current cache plane for the center camera
-                        // We do this here so that all our dispatches will be together, and all our rasterization will
-                        // be together. This will hopefully prevent constantly switching from compute to graphics
-                        // subchannels and will enable better work overlap 
-                        GPUMapSplats(commandBuffer, camera, transform, m_geometryDrawMode == GeometryDrawMode.SHOnly,
-                            m_centerEyeDataBuffer, cachePlaneData.firstSplat, cachePlaneData.splatCount,
-                            cachePlaneData.mappedSplatsBuffer);
-                    }
-
-                    curFieldStart += cachePlaneData.splatCount;
-                }
-            }
-
-            EnsureGpuSplatBufferHasCapacity(ref m_nearFieldGpuSplatBuffer, m_splatsInNearFieldCount * m_xrUtils.GetEyeCount());
-
-            if (m_splatsInNearFieldCount > 0) {
+            if (m_splatCount > 0) {
                 // Map the splats in the near field for the current eye(s)
-                GPUMapSplats(commandBuffer, camera, transform, m_geometryDrawMode == GeometryDrawMode.SHOnly, m_eyeData, 0, m_splatsInNearFieldCount, m_nearFieldGpuSplatBuffer);
-            }
-
-            // If we haven't yet updated the frame counter, this is the first eye. Render the far field images, then
-            // restore the GS render target
-            if (isRenderingToFirstEye && useFarField) {
-                // Loop through all the planes and draw their splats
-                for (var i = 0; i < cachePlanes.Count; i++) {
-                    var cachePlaneDefinition = cachePlanes[i];
-                    var cachePlaneData = m_cachePlaneDatas[i];
-                    
-                    commandBuffer.SetRenderTarget(cachePlaneDefinition.renderTexture);
-                    commandBuffer.ClearRenderTarget(RTClearFlags.Color, new Color(0, 0, 0, 0), 0, 0);
-
-                    if (cachePlaneData.splatCount > 0) {
-                        DrawSplats(commandBuffer, transform, cachePlaneData.splatCount, cachePlaneData.mappedSplatsBuffer, false);
-                    }
-                }
-                
-                // Restore the original render target
-                if (m_xrUtils.IsSinglePassXR()) {
-                    commandBuffer.SetRenderTarget(ShaderIds.GaussianSplatRT, BuiltinRenderTextureType.Depth, 0, CubemapFace.Unknown, -1);
-                } else {
-                    commandBuffer.SetRenderTarget(ShaderIds.GaussianSplatRT, BuiltinRenderTextureType.Depth);
-                }
+                GPUMapSplats(commandBuffer, camera, transform, m_geometryDrawMode == GeometryDrawMode.SHOnly, m_eyeData, 0, m_splatCount, m_gpuSplatBuffer);
             }
 
             // Draw the near field
-            DrawSplats(commandBuffer, transform, m_splatsInNearFieldCount, m_nearFieldGpuSplatBuffer, m_xrUtils.IsSinglePassXR());
+            DrawSplats(commandBuffer, transform, m_splatCount, m_gpuSplatBuffer, m_xrUtils.IsSinglePassXR());
             
             m_frameCounter = Time.frameCount;
         }
 
         private void EnsureGpuSplatBufferHasCapacity(ref ComputeBuffer gpuSplatBuffer, int count) {
-            // This method lets us size the near and far field splat buffers to the number of splats in each field
-            // Right now the only way to change the numbers of splats in each field is through the debug menu, so I
-            // don't expect this method to be called frequently during normal operation
-
             // Unity doesn't like allocating a 0-byte buffer
             count = Math.Max(count, 1);
 
@@ -842,14 +746,6 @@ namespace Aqua.Runtime
                 material.EnableKeyword("DEBUG_TOTAL_OPACITY");
             else
                 material.DisableKeyword("DEBUG_TOTAL_OPACITY");
-        }
-
-        public override void SetFarFieldParameters(Material farFieldMaterial) {
-            // The count of splats in the near field doubles as the index of the first splat in the far field, since all
-            // the splats are tightly packed into one buffer
-            // This variable may need a better name, PRs are welcome 
-            farFieldMaterial.SetInt(ShaderIds.FirstSplat, m_splatsInNearFieldCount);
-            farFieldMaterial.SetBuffer(ShaderIds.SortedSplatDepth, m_sortedSplatDepth);
         }
     }
 }

@@ -1,13 +1,9 @@
 // Copyright © 2024 Miris. All rights reserved.
 
-// Unity engine
 using UnityEngine;
-
-// Unity packages
-using Unity.Collections;
 using Unity.Mathematics;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     public class GameObjectUtils
     {

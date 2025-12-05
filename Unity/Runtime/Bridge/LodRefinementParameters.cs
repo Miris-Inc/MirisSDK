@@ -12,7 +12,7 @@ using System;
 using System.Runtime.InteropServices;
 using UnityEngine;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
 #endif
 
@@ -45,6 +45,7 @@ namespace Aqua.Runtime
             , m_lodUpdateDistance(5.0f)
             , m_lodUpdateRotation(20.0f)
             , m_fixedLodIndex(0)
+            , m_splatCountBudget(1000000)
         {
             // TODO: if we ever add more heavy-weight members (like containers), we may want to
             // generate a hash when the data is updated, which is then used for comparison.
@@ -62,7 +63,8 @@ namespace Aqua.Runtime
                 m_lodMaxDistance == other.m_lodMaxDistance &&
                 m_lodUpdateDistance == other.m_lodUpdateDistance &&
                 m_lodUpdateRotation == other.m_lodUpdateRotation &&
-                m_fixedLodIndex == other.m_fixedLodIndex
+                m_fixedLodIndex == other.m_fixedLodIndex &&
+                m_splatCountBudget == other.m_splatCountBudget
             );
         }
 
@@ -120,7 +122,7 @@ namespace Aqua.Runtime
 
         // Distance traveled before triggering another LOD update
 #if USING_CSHARP
-        [Range(1.0f, 10.0f)]
+        [Range(0.01f, 10.0f)]
 #endif
         public float m_lodUpdateDistance;
 
@@ -133,7 +135,10 @@ namespace Aqua.Runtime
         // ----------------------------------
         // LodSelectionMode::Fixed Params
         // ----------------------------------
-
+#if USING_CSHARP
+        [Range(1.0f, 20000000.0f)]
+#endif
+        public int m_splatCountBudget;
 #if USING_CSHARP
         [Range(0.0f, 15.0f)]
 #endif

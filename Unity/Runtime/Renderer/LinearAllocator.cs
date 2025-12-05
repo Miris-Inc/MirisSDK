@@ -3,7 +3,7 @@
 using System;
 using UnityEngine;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     public class LinearAllocator
     {
@@ -40,8 +40,8 @@ namespace Aqua.Runtime
             Int64 offset = (Int64)freeOffset;
             m_freeOffset = newFreeOffset;
 
-            AquaUnityApi.PlotMetric("GPU Mem free", (long)(m_size - m_freeOffset));
-            AquaUnityApi.PlotMetric("GPU Mem Allocs", m_numAllocations);
+            MirisApi.PlotMetric("GPU Mem free", (long)(m_size - m_freeOffset));
+            MirisApi.PlotMetric("GPU Mem Allocs", m_numAllocations);
             return offset;
         }
 
@@ -59,7 +59,7 @@ namespace Aqua.Runtime
         public void DumpStats()
         {
             Int64 freeMem = (Int64)(m_size - m_freeOffset);
-            Debug.Log($"num allocations:{m_numAllocations} free mem:{freeMem}");
+            MirisDebug.Log($"num allocations:{m_numAllocations} free mem:{freeMem}");
         }
 
         private int m_numAllocations = 0;

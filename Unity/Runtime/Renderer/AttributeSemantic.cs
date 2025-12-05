@@ -3,7 +3,7 @@
 // Standard library
 using System;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     // For associating a piece of data with its intended usage / purpose,
     // and determines how it is processed throughout the system.
@@ -65,6 +65,7 @@ namespace Aqua.Runtime
                             AttributeEncoding.Float32x4 => true,
                             AttributeEncoding.Float16x4 => true,
                             AttributeEncoding.RGBA_Compressed_ASTC_4x4_LDR => true,
+                            AttributeEncoding.RGBA_Compressed_ASTC_4x4_HDR => true,
                             _ => false
                         };
                     }
@@ -76,6 +77,7 @@ namespace Aqua.Runtime
                             AttributeEncoding.Float32x4 => true,
                             AttributeEncoding.Float16x4 => true,
                             AttributeEncoding.RGBA_Compressed_ASTC_4x4_LDR => true,
+                            AttributeEncoding.RGBA_Compressed_ASTC_4x4_HDR => true,
                             _ => false
                         };
                     }

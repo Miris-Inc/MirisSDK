@@ -8,7 +8,7 @@ using UnityEngine;
 using UnityEditor;
 using UnityEditor.Callbacks;
 
-namespace Aqua.Editor
+namespace Miris.Editor
 {
     public class BuildScript
     {

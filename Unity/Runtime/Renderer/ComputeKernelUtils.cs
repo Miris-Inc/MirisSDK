@@ -1,10 +1,8 @@
 // Copyright © 2024 Miris. All rights reserved.
 
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
-namespace Aqua.Runtime {
+namespace Miris.Runtime {
     
     public static class ComputeKernelUtils 
     {

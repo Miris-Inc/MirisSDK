@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEngine.XR;
 using UnityEngine.XR.Management;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     public static class XRFrameInfo {
         public static int m_multipassId { get; set; }

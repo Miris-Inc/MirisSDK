@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     public class StringUtils
     {

@@ -2,16 +2,15 @@
 
 // Standard library
 using System;
-
-// Unity Engine
-using UnityEngine.Assertions;
-
 // Unity packages
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
+// Unity Engine
+using UnityEngine.Assertions;
+using UnityEngine.Experimental.Rendering;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     public class DataFormatUtils
     {
@@ -34,6 +33,7 @@ namespace Aqua.Runtime
         }
     }
 
+
     // Pairing of a blind data buffer with its semantic & encoding.  
     // Provides convenience accessors for loading into the renderer.
     // The semantic and encoding will inform how the data should be decoded (e.g. in the GPU shader).
@@ -41,30 +41,70 @@ namespace Aqua.Runtime
     {
         private AttributeSemantic m_semantic;
         private AttributeEncoding m_encoding;
-        public const int s_invalidTextureWidth = -1;
+        public const int s_invalidPropertyValue = -1;
+        public const int s_invalidTextureWidth = s_invalidPropertyValue;
+        public const int s_invalidTextureHeight = s_invalidPropertyValue;
         private int m_textureWidth;
+        private int m_textureHeight;
         private int m_blockDim;
-        private int m_elementCount = -1;
+        private int m_elementCount = s_invalidPropertyValue;
+        private int m_splatCount = s_invalidPropertyValue;
+        private int m_totalBytes = s_invalidPropertyValue;
         private AquaHash m_hash;
+        private Texture2D m_texture;
+        private CompressionType m_compressionType;
+        
+        // Per-component min/max values for ASTC texture normalization
+        private readonly Vector4 m_minVec = Vector4.zero;
+        private readonly Vector4 m_maxVec = Vector4.one;
+        private bool m_isRangeNormalized = false;
+        
+        // Block bounds buffer for ASTC textures (optional)
+        private AttributeBuffer m_blockBoundsBuffer;
+        private bool m_hasBlockBoundsBuffer = false;
+        private bool m_isBlockScanlineOrder = true;
 
         // Underlying data storage (bytes)
         protected NativeArray<byte> m_nativeArray;
         protected Texture2D[] m_externalTextures;
         protected MosaicDescriptorInfo[] m_mosaicDescriptorInfos;
 
+        private GpuArray m_blockBoundsGpuBuffer;
+
+        // implement compression type to GraphicsFormat mapping if needed
+        GraphicsFormat ConvertToGraphicsFormat(CompressionType compressionType)
+        {
+            return compressionType switch
+            {
+                CompressionType.TEX_ASTC_4x4_UNORM_BLOCK => GraphicsFormat.RGBA_ASTC4X4_UNorm,
+                CompressionType.TEX_ASTC_5x5_UNORM_BLOCK => GraphicsFormat.RGBA_ASTC5X5_UNorm,
+                CompressionType.TEX_ASTC_6x6_UNORM_BLOCK => GraphicsFormat.RGBA_ASTC6X6_UNorm,
+                CompressionType.TEX_ASTC_8x8_UNORM_BLOCK => GraphicsFormat.RGBA_ASTC8X8_UNorm,
+                CompressionType.TEX_ASTC_10x10_UNORM_BLOCK => GraphicsFormat.RGBA_ASTC10X10_UNorm,
+                CompressionType.TEX_ASTC_12x12_UNORM_BLOCK => GraphicsFormat.RGBA_ASTC12X12_UNorm,
+                CompressionType.TEX_ASTC_4x4_SFLOAT_BLOCK => GraphicsFormat.RGBA_ASTC4X4_UFloat,
+                CompressionType.TEX_ASTC_5x5_SFLOAT_BLOCK => GraphicsFormat.RGBA_ASTC5X5_UFloat,
+                CompressionType.TEX_ASTC_6x6_SFLOAT_BLOCK => GraphicsFormat.RGBA_ASTC6X6_UFloat,
+                CompressionType.TEX_ASTC_8x8_SFLOAT_BLOCK => GraphicsFormat.RGBA_ASTC8X8_UFloat,
+                CompressionType.TEX_ASTC_10x10_SFLOAT_BLOCK => GraphicsFormat.RGBA_ASTC10X10_UFloat,
+                CompressionType.TEX_ASTC_12x12_SFLOAT_BLOCK => GraphicsFormat.RGBA_ASTC12X12_UFloat,
+                _ => GraphicsFormat.None
+            };
+        }
+
+        public bool IsBlockCompressed()
+        {
+            return m_compressionType >= CompressionType.TEX_ASTC_BEGIN && m_compressionType <= CompressionType.TEX_ASTC_END;
+        }
+
+        CompressionType GetCompressionType()
+        {
+            return m_compressionType;
+        }
+
         // --------------------------------------------------------------------
         // Constructors
         // --------------------------------------------------------------------
-
-        // Allocate new memory with a specified format.
-        public AttributeBuffer(AttributeSemantic semantic, AttributeEncoding encoding, int elementCount)
-        {
-            ApplySemanticAndEncoding(semantic, encoding);
-
-            // Allocate a new array.
-            int totalBytes = elementCount * GetBytesPerElement();
-            m_nativeArray = new(totalBytes, Allocator.Temp);
-        }
 
         // Wrap a AttributeBuffer around pre-allocated memory, using a specified format.
         // If it is a texture, the textureWidth arg must be supplied.
@@ -72,18 +112,46 @@ namespace Aqua.Runtime
             AttributeEncoding encoding, 
             NativeArray<byte> nativeArray,
             AquaHash hash,
+            CompressionType compressionType,
             int textureWidth = s_invalidTextureWidth, 
-            int blockDim = -1)
+            int textureHeight = s_invalidTextureHeight,
+            int blockDim = s_invalidPropertyValue,
+            int elementCount = s_invalidPropertyValue,
+            int totalBytes = s_invalidPropertyValue,
+            int splatCount = s_invalidPropertyValue,
+            Vector4 minVec = default,
+            Vector4 maxVec = default,
+            bool isRangeNormalized = false)
         {
             m_hash = hash;
             m_blockDim = blockDim;
+            m_elementCount = elementCount;
+            m_totalBytes = totalBytes;
+            m_minVec = minVec;
+            m_maxVec = (maxVec == default) ? Vector4.one : maxVec;
+            m_isRangeNormalized = isRangeNormalized;
             ApplySemanticAndEncoding(semantic, encoding);
             m_nativeArray = nativeArray;
+            m_splatCount = splatCount;
+            m_compressionType = compressionType;
 
-            if (IsTexture())
+            if (IsBlockCompressed())
             {
                 Assert.AreNotEqual(textureWidth, s_invalidTextureWidth);
                 m_textureWidth = textureWidth;
+                m_textureHeight = textureHeight;
+                
+                GraphicsFormat graphicsFormat = ConvertToGraphicsFormat(compressionType);
+                m_texture = new Texture2D(m_textureWidth, m_textureHeight, graphicsFormat, 0, TextureCreationFlags.DontInitializePixels);
+                if(m_texture == null)
+                {
+                    throw new Exception("Failed to create texture with format " + graphicsFormat);
+                }
+                else
+                {
+                    m_texture.LoadRawTextureData(m_nativeArray);
+                    m_texture.Apply(false, true);
+                }
             }
         }
 
@@ -91,13 +159,26 @@ namespace Aqua.Runtime
             AttributeEncoding encoding,
             MosaicDescriptorInfo[] mosaicDescriptorInfos,
             AquaHash hash,
+            CompressionType compressionType,
             int textureWidth = s_invalidTextureWidth,
-            int blockDim = -1,
-            int elementCount = -1)
+            int textureHeight = s_invalidTextureHeight,
+            int blockDim = s_invalidPropertyValue,
+            int elementCount = s_invalidPropertyValue,
+            int totalBytes = s_invalidPropertyValue, 
+            int splatCount = s_invalidPropertyValue,
+            Vector4 minVec = default,
+            Vector4 maxVec = default,
+            bool isRangeNormalized = false)
         {
             m_hash = hash;
             m_blockDim = blockDim;
             m_mosaicDescriptorInfos = mosaicDescriptorInfos;
+            m_totalBytes = totalBytes;
+            m_splatCount = splatCount;
+            m_compressionType = compressionType;
+            m_minVec = minVec;
+            m_maxVec = (maxVec == default) ? Vector4.one : maxVec;
+            m_isRangeNormalized = isRangeNormalized;
             ApplySemanticAndEncoding(semantic, encoding);
             if (m_mosaicDescriptorInfos.Length > 0) {
                 m_externalTextures = new Texture2D[m_mosaicDescriptorInfos.Length];
@@ -151,6 +232,20 @@ namespace Aqua.Runtime
             return m_semantic;
         }
 
+        public int GetComponentCount()
+        {
+            return m_semantic switch
+            {
+                AttributeSemantic.Scale => 3,
+                AttributeSemantic.SHCoefficients => throw new NotImplementedException(),
+                AttributeSemantic.Color => 4,
+                AttributeSemantic.Position => 3,
+                AttributeSemantic.Orientation => 4,
+                AttributeSemantic.BlockBounds => throw new NotImplementedException(),
+                _ => throw new NotImplementedException()
+            };
+        }
+
         public MosaicDescriptorInfo[] GetMosaicDescriptorInfos()
         {
             return m_mosaicDescriptorInfos;
@@ -168,25 +263,16 @@ namespace Aqua.Runtime
 
         public int GetElementCount()
         {
-            if (m_elementCount > 0)
-            {
-                return m_elementCount;
-            }
-            return m_nativeArray.Length / GetBytesPerElement();
+            return m_elementCount;
         }
-
-        public int GetBytesPerElement()
+        public int GetSplatCount()
         {
-            return m_encoding.GetBytesPerElement();
+            return m_splatCount;
         }
 
         public int GetTotalBytes()
         {
-            if (m_elementCount > 0)
-            {
-                return GetElementCount() * GetBytesPerElement();
-            }
-            return m_nativeArray.Length;
+            return m_totalBytes;
         }
 
         // See GaussianSplatRenderer and GaussianSplatDecoder.hlsl for how this shader keyword is consumed.
@@ -198,6 +284,10 @@ namespace Aqua.Runtime
         public bool IsTexture()
         {
             return m_encoding.IsTextureEncoding();
+        }
+        public Texture2D GetTexture()
+        {
+            return m_texture;
         }
 
         public bool IsGPUBuffer()
@@ -216,12 +306,69 @@ namespace Aqua.Runtime
         public (int, int) GetTextureSize()
         {
             Assert.IsTrue(IsTexture());
-            return CalculateTextureSize(GetElementCount(), m_textureWidth);
+            return CalculateTextureSize(m_textureHeight, m_textureWidth);
         }
         
         public int GetBlockDim()
         {
             return m_blockDim;
+        }
+
+        // Get per-component min/max ranges for ASTC textures
+        public (Vector4 min, Vector4 max) GetMinMaxVectors()
+        {
+            return (m_minVec, m_maxVec);
+        }
+
+        public bool GetIsRangeNormalized()
+        {
+            return m_isRangeNormalized;
+        }
+
+        // Set the block bounds buffer for this attribute (used for ASTC compression)
+        public void SetBlockBoundsBuffer(AttributeBuffer blockBoundsBuffer)
+        {
+            m_blockBoundsBuffer = blockBoundsBuffer;
+        }
+        public void SetHasBlockBoundsBuffer(bool hasBlockBoundsBuffer)
+        {
+            m_hasBlockBoundsBuffer = hasBlockBoundsBuffer;
+        }
+        public bool HasBlockBoundsBuffer()
+        {
+            return m_hasBlockBoundsBuffer;
+        }
+
+        public void SetBlockScanlineOrder(bool isScanlineOrder)
+        {
+            m_isBlockScanlineOrder = isScanlineOrder;
+        }
+        public bool IsBlockScanlineOrder()
+        {
+            return m_isBlockScanlineOrder;
+        }
+
+        // Get the block bounds buffer (returns null if not available)
+        public AttributeBuffer GetBlockBoundsBuffer()
+        {
+            return m_blockBoundsBuffer;
+        }
+
+        // Get block bounds as GPU buffer for shader use (returns null if not available)
+        public IGpuBuffer GetBlockBoundsGpuBuffer()
+        {
+            if (m_blockBoundsBuffer == null)
+                return null;
+            
+            if (m_blockBoundsGpuBuffer != null)
+                return m_blockBoundsGpuBuffer;
+            // Create a GpuArray for the block bounds data
+            int totalBytes = m_blockBoundsBuffer.GetTotalBytes();
+            int blockBoundsBufferId = Shader.PropertyToID("_blockBoundsBuffer");
+            var gpuBuffer = new GpuArray(totalBytes, blockBoundsBufferId, 0, "BlockBounds");
+            gpuBuffer.SetData(m_blockBoundsBuffer.GetArray());
+            m_blockBoundsGpuBuffer = gpuBuffer;
+            return gpuBuffer;
         }
 
         // --------------------------------------------------------------------

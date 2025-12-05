@@ -9,15 +9,28 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Assertions;
 using UnityEngine.Rendering;
+using Unity.Mathematics;
+
+
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 // Unity packages
 using Unity.Profiling;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
 
     public class GaussianSplatRenderComponent : IDisposable
     {
+        private enum CullingState : int
+        {
+            Enabled = 0,
+            Disabled, 
+            Paused
+        }
+
         // ... existing fields ...
         public void UpdateCompositePass(Material material)
         {
@@ -36,6 +49,7 @@ namespace Aqua.Runtime
 
         // Cached bounds
         private Bounds m_dataSourceBounds = new();
+        private Bounds m_dataWorldBounds = new();
         private Bounds m_objectBounds = new();
         private Bounds m_worldBounds = new();
 
@@ -45,6 +59,9 @@ namespace Aqua.Runtime
 
         public AquaTransform m_transform;
         public Matrix4x4 m_assetMatrix = Matrix4x4.identity;
+
+        private CullingState m_cullingState = CullingState.Enabled;
+        private Plane[] m_cullingPlanes = null;
 
         // ---------------------------------------------------------
         // Render Pipeline Selection
@@ -99,9 +116,9 @@ namespace Aqua.Runtime
 
         private GpuSortAlgorithm m_prevSortAlgorithm;
 
-        private GeometryRenderer.SortBehavior m_sortBehavior = GeometryRenderer.SortBehavior.FirstCameraPerFrame; // This is our optimal default
+        public GeometryRenderer.SortBehavior m_sortBehavior = GeometryRenderer.SortBehavior.FirstCameraPerFrame; // This is our optimal default
 
-        private int m_sortNthFrame = 100;
+        public int m_sortNthFrame = 100;
 
         // ---------------------------------------------------------
         // Point Renderer Specific Options
@@ -148,6 +165,10 @@ namespace Aqua.Runtime
             m_gsRenderer = null;
             m_debugRenderer?.Dispose();
             m_debugRenderer = null;
+            m_objectBounds = new();
+            m_worldBounds = new();   
+            m_dataSourceBounds = new();
+            m_dataWorldBounds = new();
         }
 
         public int GetSplatCount()
@@ -165,6 +186,15 @@ namespace Aqua.Runtime
             return m_worldBounds;
         }
 
+        public void ToggleCulling() {
+            if(m_cullingState == CullingState.Enabled)
+            {
+                m_cullingState = CullingState.Paused;
+            } else {
+                m_cullingState = CullingState.Enabled;
+            }
+        }
+        
         // Is our data source in a valid state?
         public bool IsAssetValid()
         {
@@ -189,6 +219,22 @@ namespace Aqua.Runtime
             return false;
         }
 
+        private CullingState DetermineCullingState()
+        {
+            // default to current culling state
+            CullingState cullingState = m_cullingState;
+            #if UNITY_EDITOR 
+            // Disable Culling if Editor && Editor Scene View in use 
+            if(SceneView.lastActiveSceneView != null && SceneView.lastActiveSceneView.hasFocus){
+                cullingState = CullingState.Disabled;
+            }
+            #else 
+            // always enable culling if not in the Unity Editor
+            cullingState = CullingState.Enabled;
+            #endif
+            return cullingState;
+        }
+
         public void Update(Transform transform)
         {
             // The renderer may be asked to update when the asset is in an  
@@ -202,11 +248,9 @@ namespace Aqua.Runtime
 
             // Re-populate rendering resources when the asset or GPU sorting algorithm changes.
             m_prevValidDataSources = m_validDataSources;
-#if UNITY_EDITOR
-            m_validDataSources = GetVisibleDataSourcesSorted(Camera.main, performCulling: false);
-#else
-            m_validDataSources = GetVisibleDataSourcesSorted(Camera.main);
-#endif
+
+            m_validDataSources = GetVisibleDataSourcesSorted(Camera.main, cullingState: DetermineCullingState());
+
             if (RendererDirty())
             {
                 UpdateRenderer();
@@ -279,22 +323,21 @@ namespace Aqua.Runtime
             return missing_renderer || pipeline_changed || geometry_renderer_needs_update || AreDataSourcesDirty();
         }
 
-        private GaussianSplatDataSource[] GetVisibleDataSourcesSorted(Camera camera, bool performCulling=true)
+        private GaussianSplatDataSource[] GetVisibleDataSourcesSorted(Camera camera, CullingState cullingState=CullingState.Enabled)
         {
             s_getVisibleDataSourcesMarker.Begin();
 
             List<(GaussianSplatDataSource dataSource, float distance)> visibleDataSources = new();
 
-            Plane[] localPlanes = null;
-
-            if (performCulling)
+            if (cullingState == CullingState.Enabled)
             {
+                m_cullingPlanes = null;
                 // returned camera frustum planes are in worldspace
                 Plane[] frustumPlanes = GeometryUtility.CalculateFrustumPlanes(camera);
 
                 // create localspace frustum planes to optimise testing each datasource
                 // since the returned bounds for these are in the assets localspace
-                localPlanes = new Plane[6];
+                m_cullingPlanes = new Plane[6];
                 uint planeIndex = 0;
                 foreach (Plane plane in frustumPlanes)
                 {
@@ -302,7 +345,7 @@ namespace Aqua.Runtime
                     Vector3 planeCentreLocal = m_transform.InverseTransformPoint(planeCentreWorld);
                     Vector3 planeNormalLocal = m_transform.InverseTransformDirection(frustumPlanes[planeIndex].normal);
 
-                    localPlanes[planeIndex] = new Plane(planeNormalLocal, planeCentreLocal);
+                    m_cullingPlanes[planeIndex] = new Plane(planeNormalLocal, planeCentreLocal);
                     planeIndex++;
                 }
             }
@@ -317,7 +360,7 @@ namespace Aqua.Runtime
                 }
 
                 Bounds dataSourceBounds = dataSource.GetObjectBounds();
-                if (!performCulling || GeometryUtility.TestPlanesAABB(localPlanes, dataSourceBounds))
+                if (cullingState == CullingState.Disabled || GeometryUtility.TestPlanesAABB(m_cullingPlanes, dataSourceBounds))
                 {
                     float distance = Vector3.Distance(camWorldPos, m_transform.TransformPoint(dataSourceBounds.center));
                     visibleDataSources.Add((dataSource, distance));
@@ -335,6 +378,7 @@ namespace Aqua.Runtime
         private void CalculateObjectAndWorldBounds()
         {
             Vector3[] corners = BoundsUtils.BoundsGetCorners(m_dataSourceBounds);
+            Vector3[] worldCorners = BoundsUtils.BoundsGetCorners(m_dataWorldBounds);
 
             // Calculate object space bounds 
             m_objectBounds = new Bounds(m_assetMatrix.MultiplyPoint3x4(corners[0]), Vector3.zero);
@@ -344,10 +388,10 @@ namespace Aqua.Runtime
             }
 
             // Calculate world space bounds
-            m_worldBounds = new Bounds(m_transform.TransformPoint(corners[0]), Vector3.zero);
-            for (int cornerIndex = 1; cornerIndex < corners.Length; cornerIndex++)
+            m_worldBounds = new Bounds(m_transform.TransformPoint(worldCorners[0]), Vector3.zero);
+            for (int cornerIndex = 1; cornerIndex < worldCorners.Length; cornerIndex++)
             {
-                m_worldBounds.Encapsulate(m_transform.TransformPoint(corners[cornerIndex]));
+                m_worldBounds.Encapsulate(m_transform.TransformPoint(worldCorners[cornerIndex]));
             }
         }
 
@@ -357,7 +401,7 @@ namespace Aqua.Runtime
             {
                 if (m_gsRenderer == null || m_prevRenderPipeline != m_renderPipeline)
                 {
-                    Debug.Log("Updating Gaussian Splats Renderer");
+                    MirisDebug.Log("Updating Gaussian Splats Renderer");
 
                     m_gsRenderer?.Dispose();
 
@@ -365,11 +409,11 @@ namespace Aqua.Runtime
                     {
                         case Pipeline.Geometry:
                             m_gsRenderer = new GeometryRenderer();
-                            Debug.Log("  created new Geometry Renderer");
+                            MirisDebug.Log("  created new Geometry Renderer");
                             break;
                         case Pipeline.Points:
                             m_gsRenderer = new PointRenderer();
-                            Debug.Log("  created new Point Renderer");
+                            MirisDebug.Log("  created new Point Renderer");
                             break;
                         default:
                             break;
@@ -408,6 +452,16 @@ namespace Aqua.Runtime
                         maxBound = Vector3.Max(maxBound, dataSourceBounds.max);
                     }
                     m_dataSourceBounds.SetMinMax(minBound, maxBound);
+
+                    Vector3 minWorldBound = Vector3.positiveInfinity;
+                    Vector3 maxWorldBound = Vector3.negativeInfinity;
+                    foreach (var dataSource in m_dataSources)
+                    {
+                        Bounds dataSourceBounds = dataSource.GetObjectBounds();
+                        minWorldBound = Vector3.Min(minBound, dataSourceBounds.min);
+                        maxWorldBound = Vector3.Max(maxBound, dataSourceBounds.max);
+                    }
+                    m_dataWorldBounds.SetMinMax(minWorldBound, maxWorldBound);
 
                     CalculateObjectAndWorldBounds();
                 }
@@ -459,10 +513,6 @@ namespace Aqua.Runtime
             }
         }
         
-        public void SetFarFieldParameters(Material farFieldMaterial) {
-            m_gsRenderer.SetFarFieldParameters(farFieldMaterial);
-        }
-
         private void DrawDebug(CommandBuffer commandBuffer, Camera camera)
         {
             if (m_debugRenderer == null)
@@ -494,9 +544,22 @@ namespace Aqua.Runtime
                     commandBuffer,
                     m_transform,
                     dataSource.GetObjectBounds(),
-                    dataSource.GetObjectIdColor()
+                    MapLodIndexToColor(dataSource.GetLodIndex())
                 );
             }
+        }
+
+        private float4 MapLodIndexToColor(int lodIndex)
+        {
+            float lodIndexNormalized = 0.0f;
+
+            int minMaxDifference = m_lodHeatMapMaxLodIndex - m_lodHeatMapMinLodIndex;
+            if (minMaxDifference > 0)
+            {
+                lodIndexNormalized = (lodIndex - m_lodHeatMapMinLodIndex) / (float)minMaxDifference;
+            }
+
+            return ColorUtils.HueToRgba(1.0f - lodIndexNormalized);
         }
     }
 }

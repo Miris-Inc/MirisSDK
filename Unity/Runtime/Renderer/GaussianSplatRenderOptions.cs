@@ -1,22 +1,9 @@
 // Copyright © 2024 Miris. All rights reserved.
 
-// C# Standard Library
 using System;
-using System.Linq;
-
-// Unity Engine
 using UnityEngine;
-using UnityEngine.Assertions;
-using UnityEngine.Rendering;
-using UnityEngine.XR;
-using UnityEditor;
 
-// Unity packages
-using Unity.Profiling;
-using System.Collections.Generic;
-using UnityEngine.UIElements;
-
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
 
     // An optional component that can be attached to a GameObject with a Miris Stream for augmenting
@@ -66,10 +53,6 @@ namespace Aqua.Runtime
         // ---------------------------------------------------------
         // Sorting related enums & members
         // ---------------------------------------------------------
-
-        // Allow selection of different GPU Sorting Algorithms.
-        [SerializeField] 
-        private GpuSortAlgorithm m_sortAlgorithm = GpuSortAlgorithm.DeviceRadixSort;
 
         [SerializeField]
         [Tooltip(
@@ -123,9 +106,30 @@ namespace Aqua.Runtime
                 return;
             }
 
-            if (stream.m_assetRootObjectIdToRenderComponent != null)
+            foreach (var renderComponent in stream.GetRenderComponents())
             {
-                // TODO: Apply the changes from the serialized fields onto our render components.
+                // Pipeline
+                renderComponent.m_renderPipeline = m_renderPipeline;
+
+                // Common options
+                renderComponent.m_gaussianSigmaThreshold = m_gaussianSigmaThreshold;
+                renderComponent.m_alphaCullingThreshold = m_alphaCullingThreshold;
+                renderComponent.m_SHOrder = m_SHOrder;
+
+                // Geometry renderer options
+                renderComponent.m_drawMode = m_drawMode;
+                renderComponent.m_nearClipThreshold = m_nearClipThreshold;
+                renderComponent.m_fadeLargeSplats = m_fadeLargeSplats;
+
+                // Sort options
+                renderComponent.m_sortBehavior = m_sortBehavior;
+                renderComponent.m_sortNthFrame = m_sortNthFrame;
+
+                // Points renderer options
+                renderComponent.m_pointsDrawMode = m_pointsDrawMode;
+                renderComponent.m_pointsSHAxis = m_pointsSHAxis;
+                renderComponent.m_pointsSHChannel = m_pointsSHChannel;
+                renderComponent.m_pointsFlatnessPercent = m_pointsFlatnessPercent;
             }
         }
     }

@@ -1,15 +1,8 @@
 // Copyright © 2024 Miris. All rights reserved.
 
-// Standard library
-using System;
-
-// Unity Engine
 using UnityEngine.Experimental.Rendering;
 
-// Unity packages
-using Unity.Mathematics;
-
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     // Various ways to encode/compress the underlying data.
     // Not every encoding is supported by its semantic.
@@ -25,73 +18,40 @@ namespace Aqua.Runtime
 
         // Compressed texture formats
         // See https://docs.unity3d.com/Manual/class-TextureImporterOverride.html
-        RGBA_Compressed_ASTC_4x4_LDR // 1 byte
+        RGBA_Compressed_ASTC_4x4_LDR,
+        RGBA_Compressed_ASTC_5x5_LDR,
+        RGBA_Compressed_ASTC_6x6_LDR,
+        RGBA_Compressed_ASTC_8x8_LDR,
+        RGBA_Compressed_ASTC_10x10_LDR,
+        RGBA_Compressed_ASTC_12x12_LDR,
+        RGBA_Compressed_ASTC_4x4_HDR,
+        RGBA_Compressed_ASTC_5x5_HDR,
+        RGBA_Compressed_ASTC_6x6_HDR,
+        RGBA_Compressed_ASTC_8x8_HDR,
+        RGBA_Compressed_ASTC_10x10_HDR,
+        RGBA_Compressed_ASTC_12x12_HDR
     }
 
     // Extends the AttributeEncoding enum with methods
     static public class AttributeEncodingExtensions
     {
-        static public int GetBytesPerElement(this AttributeEncoding encoding)
-        {
-            return encoding switch
-            {
-                AttributeEncoding.Float32 => 4,
-                AttributeEncoding.Float32x3 => 12,
-                AttributeEncoding.Float32x4 => 16,
-                AttributeEncoding.Float16x3 => 6,
-                AttributeEncoding.Float16x4 => 8,
-                AttributeEncoding.UInt16x3 => 6,
-                AttributeEncoding.RGBA_Compressed_ASTC_4x4_LDR => 1,
-                _ => throw new ArgumentOutOfRangeException(nameof(AttributeEncoding), encoding.ToString(), null)
-            };
-        }
-
-        static unsafe public void WriteFloat3(this AttributeEncoding encoding, float3 value, byte* outputPtr)
-        {
-            switch (encoding)
-            {
-                case AttributeEncoding.Float32x3:
-                    {
-                        ((float*)outputPtr)[0] = value.x;
-                        ((float*)outputPtr)[1] = value.y;
-                        ((float*)outputPtr)[2] = value.z;
-                        break;
-                    }
-                default:
-                    {
-                        throw new ArgumentOutOfRangeException(
-                            nameof(AttributeEncoding) + " " + encoding.ToString() + " does not support writing float3's"
-                        );
-                    }
-            }
-        }
-
-        static unsafe public void WriteFloat4(this AttributeEncoding encoding, float4 value, byte* outputPtr)
-        {
-            switch (encoding)
-            {
-                case AttributeEncoding.Float32x4:
-                    {
-                        ((float*)outputPtr)[0] = value.x;
-                        ((float*)outputPtr)[1] = value.y;
-                        ((float*)outputPtr)[2] = value.z;
-                        ((float*)outputPtr)[3] = value.w;
-                        break;
-                    }
-                default:
-                    {
-                        throw new ArgumentOutOfRangeException(
-                            nameof(AttributeEncoding) + " " + encoding.ToString() + " does not support writing float4's"
-                        );
-                    }
-            }
-        }
 
         static public GraphicsFormat ToGraphicsFormat(this AttributeEncoding encoding)
         {
             return encoding switch
             {
                 AttributeEncoding.RGBA_Compressed_ASTC_4x4_LDR => GraphicsFormat.RGBA_ASTC4X4_UNorm,
+                AttributeEncoding.RGBA_Compressed_ASTC_5x5_LDR => GraphicsFormat.RGBA_ASTC5X5_UNorm,
+                AttributeEncoding.RGBA_Compressed_ASTC_6x6_LDR => GraphicsFormat.RGBA_ASTC6X6_UNorm,
+                AttributeEncoding.RGBA_Compressed_ASTC_8x8_LDR => GraphicsFormat.RGBA_ASTC8X8_UNorm,
+                AttributeEncoding.RGBA_Compressed_ASTC_10x10_LDR => GraphicsFormat.RGBA_ASTC10X10_UNorm,
+                AttributeEncoding.RGBA_Compressed_ASTC_12x12_LDR => GraphicsFormat.RGBA_ASTC12X12_UNorm,
+                AttributeEncoding.RGBA_Compressed_ASTC_4x4_HDR => GraphicsFormat.RGBA_ASTC4X4_UFloat,
+                AttributeEncoding.RGBA_Compressed_ASTC_5x5_HDR => GraphicsFormat.RGBA_ASTC5X5_UFloat,
+                AttributeEncoding.RGBA_Compressed_ASTC_6x6_HDR => GraphicsFormat.RGBA_ASTC6X6_UFloat,
+                AttributeEncoding.RGBA_Compressed_ASTC_8x8_HDR => GraphicsFormat.RGBA_ASTC8X8_UFloat,
+                AttributeEncoding.RGBA_Compressed_ASTC_10x10_HDR => GraphicsFormat.RGBA_ASTC10X10_UFloat,
+                AttributeEncoding.RGBA_Compressed_ASTC_12x12_HDR => GraphicsFormat.RGBA_ASTC12X12_UFloat,
                 _ => GraphicsFormat.None
             };
         }

@@ -2,7 +2,7 @@
 
 using System;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     public struct AquaHash : IEquatable<AquaHash>
     {

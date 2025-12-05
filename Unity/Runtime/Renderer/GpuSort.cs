@@ -15,7 +15,7 @@ using Unity.Profiling.LowLevel;
 // GPUSorting package
 using GaussianSplatting.Runtime;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     // The available GPU sorting algorithms available.
     public enum GpuSortAlgorithm : int

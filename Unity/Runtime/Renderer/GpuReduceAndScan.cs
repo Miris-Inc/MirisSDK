@@ -1,11 +1,10 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
+// Copyright © 2025 Miris. All rights reserved.
 
+using System;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
     public class GPUReduceAndScan: IDisposable {
         

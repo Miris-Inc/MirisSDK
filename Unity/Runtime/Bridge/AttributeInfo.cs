@@ -9,7 +9,7 @@
 
 #if USING_CSHARP
 using System.Runtime.InteropServices;
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
 #endif
 
@@ -37,6 +37,18 @@ namespace Aqua.Runtime
         public int m_isRangeNormalized;
     };
 
+    // Vector4 struct compatible with both C++ and C#
+#if USING_CSHARP
+    [StructLayout(LayoutKind.Sequential)]
+#endif
+    public struct Vector4Value
+    {
+        public float x;
+        public float y;
+        public float z;
+        public float w;
+    };
+
     // For transporting an AttributeArray (in C++) over to AttributeBuffer (C#) 
 #if USING_CSHARP
     [StructLayout(LayoutKind.Sequential)]
@@ -45,11 +57,13 @@ namespace Aqua.Runtime
     {
         public int m_elementCount;
         public int m_bytesPerElement;
+        public int m_dataSizeBytes;       // Total data buffer size in bytes
         public void* m_dataPtr;
         public int m_elementType;
         public CompressionType m_compressionType;
         public int m_textureWidth;
         public int m_textureHeight;
+        public int m_splatCount;
         public void* m_mosaicDescriptors;
         public int m_mosaicDescriptorCount;
         public int m_blockDim;
@@ -57,6 +71,11 @@ namespace Aqua.Runtime
         public int m_hash1;
         public int m_hash2;
         public int m_hash3;
+        // Per-component min/max values for ASTC texture normalization
+        public Vector4Value m_minValue;
+        public Vector4Value m_maxValue;
+        public int m_isRangeNormalized;
+        public int m_blockScanlineOrder;
     }
 #if USING_CSHARP
 }

@@ -7,7 +7,7 @@
 
 #if USING_CSHARP
 using System.Runtime.InteropServices;
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
 #endif
 

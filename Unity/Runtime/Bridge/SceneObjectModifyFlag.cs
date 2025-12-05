@@ -11,7 +11,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace Aqua.Runtime
+namespace Miris.Runtime
 {
 #endif
 
@@ -105,7 +105,7 @@ public enum SceneObjectModifyFlag
 
     }
 #if USING_CSHARP
-} // Aqua.Runtime
+} // Miris.Runtime
 #else
 ;
 #undef public
