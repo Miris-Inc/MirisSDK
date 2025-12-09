@@ -1,0 +1,185 @@
+#pragma kernel ConvertBufferMain
+
+Texture2D<float4> _sourceBuffer;
+Texture2D<float> _eccLutTexture; // 256x256 R8
+RWStructuredBuffer<float> _destBuffer;
+StructuredBuffer<float> _blockBoundsBuffer;
+
+uint _IsAstcTexture;
+uint _SourceComponentCount;
+
+uint _BlockDim;
+uint _AllocationLength;
+uint _AllocationOffset;
+uint _SrcMosaicStride;
+uint _SrcMosaicOffset;
+uint _SrcMosaicTileWidth;
+uint _SrcMosaicTileHeight;
+uint _SrcMosaicTileX;
+uint _SrcMosaicTileY;
+uint _SrcMosaicInterleaveType;
+uint _SrcMosaicTextureWidth;
+uint _SrcMosaicTextureHeight;
+float _SrcMosaicMin;
+float _SrcMosaicMax;
+// Per-component min/max arrays for ASTC textures
+float4 _SrcMosaicMinVec;
+float4 _SrcMosaicMaxVec;
+uint _srcNumSplats;
+uint _SrcIsSHColor;
+uint _IsRangeNormalized;
+int _EccPart; // 0 <= none, 1 = part1, 2 = part2
+uint _HasBlockBounds;
+uint _HasBlockScanLineOrder;
+
+float convertSH0ToColor(float dc0)
+{
+    float kSH_C0 = 0.2820948f;
+    return dc0 * kSH_C0 + 0.5f;
+}
+
+// Apply block bounds to normalize values based on block-specific min/max
+float4 applyBlockBounds(float4 dataPoint, uint blockIndex)
+{
+    if(_HasBlockBounds == 0)
+        return dataPoint;
+    
+    float4 blockMin = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float4 blockMax = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    // Block bounds are stored as floats per block
+    for(uint i = 0; i < _SourceComponentCount; i++)
+    {
+        blockMin[i] = _blockBoundsBuffer[blockIndex * 2 * _SourceComponentCount + i];
+        blockMax[i] = _blockBoundsBuffer[blockIndex * 2 * _SourceComponentCount + _SourceComponentCount + i];
+    }
+
+    // Apply block-specific denormalization to all components as specified by _SourceComponentCount
+    float4 range = blockMax - blockMin;
+    dataPoint = dataPoint * range + blockMin;
+    
+    return dataPoint;
+}
+
+uint divRoundUp(uint a, uint b)
+{
+    return (a + b - 1) / b;
+}
+
+void unpack(int readLocation)
+{
+
+    if(_IsAstcTexture != 0)
+    {
+        uint textureWidth, textureHeight, numMips;
+        _sourceBuffer.GetDimensions(0, textureWidth, textureHeight, numMips);
+
+        const uint dim = _BlockDim;
+        uint2 XY = uint2(0,0);
+        uint blockIndex = 0;
+        if(_HasBlockScanLineOrder != 0)
+        {
+            const uint blockY = readLocation / (textureWidth * dim);
+            const uint blockXTmp = readLocation % (textureWidth * dim);
+            const uint blockX = blockXTmp / (dim * dim);
+
+            uint intraBlockIndex = readLocation - (blockY * textureWidth * dim + blockX * dim * dim);
+            blockIndex = blockY * divRoundUp(textureWidth, dim) + blockX;
+
+            uint blockDim = min(dim, textureWidth - blockX * dim);
+
+            uint2 withinBlockXY = uint2(intraBlockIndex % blockDim, intraBlockIndex / blockDim);
+
+            XY = uint2(blockX * dim, blockY * dim) + withinBlockXY;
+        }else{
+            XY = uint2(readLocation % textureWidth, readLocation / textureWidth);
+            const uint blockY = XY.y / dim;
+            const uint blockX = XY.x / dim;
+            blockIndex = blockY * divRoundUp(textureWidth, dim) + blockX;
+        }
+
+        float4 dataPoint = _sourceBuffer.Load(int3(XY, 0));
+
+        // Apply block bounds if available (typically for position data)
+        if(_HasBlockBounds != 0)
+        {
+            dataPoint = applyBlockBounds(saturate(dataPoint), blockIndex);
+        }else if(_IsRangeNormalized != 0)
+        {
+            float4 range = _SrcMosaicMaxVec - _SrcMosaicMinVec;
+            dataPoint = saturate(dataPoint) * range + _SrcMosaicMinVec;
+        }
+        
+        for(uint i = 0; i < _SourceComponentCount; i++)
+        {
+            float value = dataPoint[i];
+            _destBuffer[_AllocationOffset + readLocation * _SourceComponentCount + i] = value;
+        }
+        return;
+    }
+
+    uint y = readLocation / _SrcMosaicTileWidth;
+    uint x = readLocation - y * _SrcMosaicTileWidth;
+    
+    const uint xmin = _SrcMosaicTileX * _SrcMosaicTileWidth;
+    const uint ymin = _SrcMosaicTileY * _SrcMosaicTileHeight;
+    y += ymin;
+    x += xmin;
+    
+    float dataPoint = _sourceBuffer.Load(int3(x, y, 0)).x;
+    if(_IsRangeNormalized == 0){   
+        if (_SrcIsSHColor != 0)
+        {
+            dataPoint = convertSH0ToColor(dataPoint);
+        }
+        _destBuffer[_AllocationOffset + readLocation * _SrcMosaicStride + _SrcMosaicOffset] = dataPoint;
+        return;
+    }
+    
+    const float range = _SrcMosaicMax - _SrcMosaicMin;
+    float valueDecoded = 0;
+    
+    float valueForCombining = 0.0f;
+    if (_SrcMosaicInterleaveType == 0)
+    {
+        if(_EccPart == 1){
+            valueDecoded = dataPoint;
+        }
+        else if(_EccPart == 2){
+            uint part1 = _destBuffer[_AllocationOffset + readLocation * _SrcMosaicStride + _SrcMosaicOffset] * 255.0;
+            uint part2 = dataPoint * 255.0;
+            valueDecoded = _eccLutTexture.Load(int3(part2, part1, 0)).r;
+        }else{
+            valueDecoded = dataPoint;
+        }
+    }
+    else if(_SrcMosaicInterleaveType == 1)
+    {
+        // on CPU side order of draw calls will be first high bits then low bits
+        valueForCombining = _destBuffer[_AllocationOffset + readLocation * _SrcMosaicStride + _SrcMosaicOffset];
+        uint highBits = uint(valueForCombining * 255) & 0xff;
+        uint lowBits = uint(dataPoint * 255) & 0xff;
+        uint combinedBits = (highBits << 8) | lowBits;
+        valueDecoded = combinedBits / 65535.0f;
+        valueDecoded = valueDecoded * range + _SrcMosaicMin;
+    }
+    else
+    {
+        valueDecoded = dataPoint * range + _SrcMosaicMin;
+    }
+    
+    if (_SrcIsSHColor != 0)
+    {
+        valueDecoded = convertSH0ToColor(valueDecoded);
+    }
+    
+    _destBuffer[_AllocationOffset + readLocation * _SrcMosaicStride + _SrcMosaicOffset] = valueDecoded;
+}
+
+[numthreads(1024,1,1)]
+void ConvertBufferMain (uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _srcNumSplats)
+    {
+        unpack(id.x);
+    }
+}
