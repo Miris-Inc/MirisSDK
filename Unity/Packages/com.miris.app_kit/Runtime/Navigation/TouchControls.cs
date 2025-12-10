@@ -92,16 +92,10 @@ namespace Miris.Runtime
         private float m_gestureSensitivity = 0.01f;
 
         private MobileUserInterfaceManager m_uiManager;
-        private TimelineTouchUIController m_timelineController;
 
         public void SetUIManager(MobileUserInterfaceManager uiManager)
         {
             m_uiManager = uiManager;
-        }
-
-        public void SetTimelineController(TimelineTouchUIController timelineController)
-        {
-            m_timelineController = timelineController;
         }
 
         public void Enable(PlayerInputActions actions)
@@ -159,17 +153,7 @@ namespace Miris.Runtime
                 return;
             }
 
-            float touchDuration = m_trackedTouches[0].DeltaTime();
-            Vector2 touchDelta = m_trackedTouches[0].Delta();
             m_trackedTouches[0].EndTouch();
-
-            if(Mathf.Abs(touchDelta.y) > Mathf.Abs(touchDelta.x)){
-            } else {
-                if(touchDuration <= m_timeForTap && !startedOnInterface)
-                {
-                    m_timelineController.OnPlaybackStateButtonClicked();
-                }
-            }
         }
 
         private void ProcessSecondaryTouchComplete(InputAction.CallbackContext context){

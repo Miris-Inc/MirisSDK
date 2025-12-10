@@ -1,4 +1,5 @@
 {
+    "version": 1,
     "name": "PlayerInputActions",
     "maps": [
         {
@@ -51,36 +52,9 @@
                     "initialStateCheck": false
                 },
                 {
-                    "name": "MinMaxTimelineInterface",
-                    "type": "Button",
-                    "id": "f82ab157-6d53-495d-af8d-a726a40b3806",
-                    "expectedControlType": "",
-                    "processors": "",
-                    "interactions": "",
-                    "initialStateCheck": false
-                },
-                {
-                    "name": "AttemptTeleport",
-                    "type": "Button",
-                    "id": "d7126425-aa8d-4225-8326-b93e5f37d0d8",
-                    "expectedControlType": "",
-                    "processors": "",
-                    "interactions": "",
-                    "initialStateCheck": false
-                },
-                {
                     "name": "AttemptClearScene",
                     "type": "Button",
                     "id": "89d88f8d-f7c2-4de1-ad85-dc01cbf8593f",
-                    "expectedControlType": "",
-                    "processors": "",
-                    "interactions": "",
-                    "initialStateCheck": false
-                },
-                {
-                    "name": "SwapCameras",
-                    "type": "Button",
-                    "id": "1bf6478d-f00e-44b1-a526-a9cad084e188",
                     "expectedControlType": "",
                     "processors": "",
                     "interactions": "",
@@ -266,50 +240,6 @@
                 },
                 {
                     "name": "",
-                    "id": "b59ed7da-f5fe-49a6-b859-6c44e4e99838",
-                    "path": "<Keyboard>/t",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "MinMaxTimelineInterface",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
-                    "id": "a709183d-c0ac-4c3e-97ad-53a01f75d56d",
-                    "path": "<OculusTouchController>{LeftHand}/primaryButton",
-                    "interactions": "Hold(duration=2)",
-                    "processors": "",
-                    "groups": "",
-                    "action": "MinMaxTimelineInterface",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
-                    "id": "21b6171a-1662-4487-b990-e0646385ec75",
-                    "path": "<Keyboard>/space",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "AttemptTeleport",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
-                    "id": "c697fb21-9261-42df-8404-ca87f17f7b11",
-                    "path": "<XRController>{RightHand}/{GripButton}",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "AttemptTeleport",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
                     "id": "c4dca370-9072-4c66-b35a-36563a6ef5b5",
                     "path": "<XRController>{RightHand}/{SecondaryButton}",
                     "interactions": "",
@@ -327,28 +257,6 @@
                     "processors": "",
                     "groups": "",
                     "action": "AttemptClearScene",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
-                    "id": "788855d4-6e4c-4ac2-a870-4006b945dcf4",
-                    "path": "<Keyboard>/c",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "SwapCameras",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
-                    "id": "0a3358ae-0112-4ae1-8e42-23b485881abb",
-                    "path": "<XRController>{LeftHand}/{PrimaryButton}",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "SwapCameras",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

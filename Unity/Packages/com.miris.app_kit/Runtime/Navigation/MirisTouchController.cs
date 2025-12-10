@@ -26,8 +26,6 @@ namespace Miris.Runtime
         private MobileUserInterfaceManager m_uiManager;
         [SerializeField]
         private ButtonSetManager m_tabButtonManager;
-        [SerializeField]
-        private TimelineTouchUIController m_touchTimelineController;
 
         [Header("Miris Components")]
         [SerializeField]
@@ -67,7 +65,6 @@ namespace Miris.Runtime
         public void Awake()
         {
             m_touchControls.SetUIManager(m_uiManager);
-            m_touchControls.SetTimelineController(m_touchTimelineController);
         }
 
         private bool IsDeveloperMode()

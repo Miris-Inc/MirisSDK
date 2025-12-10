@@ -62,7 +62,6 @@ namespace Miris.Runtime
         // Client instance and API helpers
         private Client m_client;
         private Scene m_scene;
-        private Timeline m_timeline;
         private AssetManager m_assetManager;
 
         // Tracks the available MirisStreams in the current Unity scene.
@@ -139,12 +138,6 @@ namespace Miris.Runtime
                 .ToList();
 
             return renderComponents;
-        }
-
-        public Timeline GetTimeline()
-        {
-            Debug.Assert(m_timeline != null);
-            return m_timeline;
         }
 
         public Client GetClient()
@@ -598,7 +591,6 @@ namespace Miris.Runtime
             // Initialize the client instance
             m_client = new();
             m_scene = new Scene(m_client);
-            m_timeline = new Timeline(m_client);
             m_assetManager = new AssetManager(m_client);
 
             // Initialize client config.
@@ -641,7 +633,6 @@ namespace Miris.Runtime
 
             // Teardown API objects
             m_assetManager = null;
-            m_timeline = null;
             m_scene = null;
 
             // Teardown the client instance
@@ -668,11 +659,6 @@ namespace Miris.Runtime
             // Initialize client & scene state
             m_scene.SetMainCameraTransform(Camera.main.transform.localToWorldMatrix);
             m_scene.SetMainCameraViewFrustum(Camera.main);
-        }
-
-        protected void Update()
-        {
-            m_timeline.AdvanceTime();
         }
 
         protected void LateUpdate()

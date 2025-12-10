@@ -365,35 +365,5 @@ namespace Miris.Runtime
         {
             MirisApi.GetSceneMetadata(m_handle, ref metadata);
         }
-
-        public void GetTimelineConfig(ref TimelineConfig config)
-        {
-            MirisApi.GetTimelineConfig(m_handle, ref config);
-        }
-
-        public void SetTimelineConfig(ref TimelineConfig config)
-        {
-            MirisApi.SetTimelineConfig(m_handle, ref config);
-        }
-
-        public void GetTime(ref Timecode timecode)
-        {
-            MirisApi.GetTime(m_handle, ref timecode);
-        }
-
-        public void GetTimeRange(ref Timecode startTime, ref Timecode endTime)
-        {
-            MirisApi.GetTimeRange(m_handle, ref startTime, ref endTime);
-        }
-
-        public void AdvanceTime(float hostTimeDelta)
-        {
-            MirisApi.AdvanceTime(m_handle, hostTimeDelta);
-        }
-
-        public void SeekToTime(ref Timecode newTime)
-        {
-            MirisApi.SeekToTime(m_handle, ref newTime);
-        }
     }
 }

@@ -292,28 +292,6 @@ namespace Miris.Runtime
         [DllImport(AquaUnityPath)]
         static public extern void PlotMetric(string name, Int64 value);
 
-        // ---------------------------------------------------------------
-        // Timeline API
-        // ---------------------------------------------------------------
-
-        [DllImport(AquaUnityPath)]
-        static public extern void GetTimelineConfig(ClientHandle client, ref TimelineConfig config);
-
-        [DllImport(AquaUnityPath)]
-        static public extern void SetTimelineConfig(ClientHandle client, ref TimelineConfig config);
-
-        [DllImport(AquaUnityPath)]
-        static public extern void GetTime(ClientHandle client, ref Timecode timecode);
-
-        [DllImport(AquaUnityPath)]
-        static public extern void GetTimeRange(ClientHandle client, ref Timecode startTime, ref Timecode endTime);
-
-        [DllImport(AquaUnityPath)]
-        static public extern void AdvanceTime(ClientHandle client, float hostTimeDelta);
-
-        [DllImport(AquaUnityPath)]
-        static public extern void SeekToTime(ClientHandle client, ref Timecode newTime);
-
         [DllImport(AquaUnityPath)]
         static public extern IntPtr GetEccLutData();
 

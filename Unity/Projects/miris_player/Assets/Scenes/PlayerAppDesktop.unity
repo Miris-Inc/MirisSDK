@@ -985,8 +985,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_selectableAssetPrefab: {fileID: 896020741339044589, guid: 1588a1aaaeb2b4fb9af42954abc48fe9, type: 3}
-  m_nonSelectableAssetPrefab: {fileID: 0}
-  m_placeHolderThumbnails: []
   m_thumbnailLoadingMaterial: {fileID: 0}
   m_thumbnailLoadedMaterial: {fileID: 0}
   m_scrollRect: {fileID: 1297046583}
@@ -2035,7 +2033,7 @@ Camera:
     y: 0
     width: 1
     height: 1
-  near clip plane: 0.3
+  near clip plane: 0.01
   far clip plane: 100000
   field of view: 60
   orthographic: 0
