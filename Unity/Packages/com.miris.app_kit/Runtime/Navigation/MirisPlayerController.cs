@@ -42,9 +42,6 @@ namespace Miris.Runtime
         public GameObject m_xrDeveloperInterface;
 
         [SerializeField]
-        public GameObject m_xrTimelineInterface;
-
-        [SerializeField]
         private MirisStreamController m_streamController;
 
         [SerializeField]
@@ -109,7 +106,6 @@ namespace Miris.Runtime
                 m_playerInputActions.Player.MinMaxDeveloperInterface.performed += OnMinMaxDeveloperInterfacePerformed;
             }
             m_playerInputActions.Player.MinMaxUserInterface.performed += OnMinMaxUserInterfacePerformed;
-            m_playerInputActions.Player.MinMaxTimelineInterface.performed += OnMinMaxTimelineInterfacePerformed;
             m_playerInputActions.Player.AttemptClearScene.performed += OnClearScenePerformed;
             m_playerInputActions.Player.AttemptClearScene.canceled += OnClearSceneCancelled;
             m_playerInputActions.Enable();
@@ -251,11 +247,6 @@ namespace Miris.Runtime
         private void OnMinMaxDeveloperInterfacePerformed(InputAction.CallbackContext context)
         {
             m_xrDeveloperInterface.GetComponent<UserInterfaceManager>().ToggleInterfaceSize();
-        }
-
-        private void OnMinMaxTimelineInterfacePerformed(InputAction.CallbackContext context)
-        {
-            m_xrTimelineInterface.GetComponent<UserInterfaceManager>().ToggleInterfaceSize();
         }
     }
 }

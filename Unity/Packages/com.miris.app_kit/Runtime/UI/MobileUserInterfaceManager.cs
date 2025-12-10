@@ -15,8 +15,6 @@ namespace Miris.Runtime
         [SerializeField]
         private ButtonSetManager m_buttonSetManager;
         [SerializeField]
-        private TimelineTouchUIController m_timelinecontroller;
-        [SerializeField]
         private GameObject m_focusObjectButton;
         [SerializeField]
         private CanvasGroup m_canvasGroup;
@@ -98,7 +96,6 @@ namespace Miris.Runtime
         public void ClearUserInterfaceState()
         {
             m_buttonSetManager.SetDefaultState();
-            m_timelinecontroller.ResumePlayBack();
         }
 
         private void RestoreCanvas()
