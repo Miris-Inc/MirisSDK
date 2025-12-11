@@ -4,8 +4,6 @@ using System;
 
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.XR.Interaction.Toolkit;
-using Unity.XR.CoreUtils;
 
 namespace Miris.Runtime
 {
@@ -16,7 +14,6 @@ namespace Miris.Runtime
 
         [Header("Orbit")]
         public float m_orbitSpeed = 5f;
-
         private float m_orbitYaw = 0f;
         private float m_orbitPitch = 0f;
 
@@ -25,20 +22,26 @@ namespace Miris.Runtime
 
         [Header("Zoom")]
         public float m_zoomSpeed = 2f;
-        private float m_zoomDistance = 5f;      
-        public float m_minZoomDistance = 0.1f; 
+        private float m_zoomDistance = 5f;
+        public float m_minZoomDistance = 0.1f;
 
-        private ViewportInputActions m_inputActions;
+        [Header("Move")]
+        public float m_moveSpeed = 1.0f;
 
-        [SerializeField]
-        private XROrigin m_xrOrigin;
+        [Header("Look Around")]
+        public float m_lookAroundSpeed = 10.0f;
 
+        private PlayerInputActions m_inputActions;
+
+        [Flags]
         private enum InteractionMode
         {
-            None,
-            Pan,
-            Orbit,
-            Zoom
+            None = 0,
+            Pan = 1 << 0,
+            Orbit = 1 << 1,
+            Zoom = 1 << 2,
+            Move = 1 << 3,
+            LookAround = 1 << 4
         }
 
         private InteractionMode m_interactionMode = InteractionMode.None;
@@ -46,48 +49,18 @@ namespace Miris.Runtime
         private Vector2 m_panInput;
         private Vector2 m_orbitInput;
         private float m_zoomInput;
+        private Vector2 m_moveInput;
+        private Vector2 m_lookAroundInput;
 
-        [Header("Frame")]
-        private float m_lastFrameDistance = 0;
-        private bool m_frameDirectionFlipped = false;
 
         // --------------------------------------------------------------------
         // Public
         // --------------------------------------------------------------------
 
-        public void ResetCamera()
-        {
-            if(m_xrOrigin != null)
-            {
-                m_xrOrigin.MoveCameraToWorldLocation(Vector3.zero);
-                m_xrOrigin.RotateAroundCameraUsingOriginUp(0f);
-            }
-        }
-
         public void Frame(Bounds bounds)
         {
             m_targetPosition = bounds.center;
             m_zoomDistance = CalculateFrameDistance(bounds);
-            if(!Mathf.Approximately(m_zoomDistance, m_lastFrameDistance))
-            {
-                m_lastFrameDistance = m_zoomDistance;
-            } else {
-                m_frameDirectionFlipped = !m_frameDirectionFlipped;
-            }
-            if(m_xrOrigin != null)
-            {
-                if(m_frameDirectionFlipped)
-                {
-                    m_xrOrigin.MoveCameraToWorldLocation(Vector3.zero);
-                    m_xrOrigin.RotateAroundCameraUsingOriginUp(180f);
-                }
-                Quaternion rotation = transform.rotation;
-                Vector3 dir = rotation * Vector3.back;
-                Vector3 pos = m_targetPosition + dir * m_zoomDistance;
-                pos = new Vector3(pos.x, m_targetPosition.y, pos.z);
-                m_xrOrigin.MoveCameraToWorldLocation(pos);
-
-            }
         }
 
         // --------------------------------------------------------------------
@@ -97,62 +70,58 @@ namespace Miris.Runtime
         protected void OnEnable()
         {
             m_inputActions = new();
-            m_inputActions.Viewport.Pan.performed += OnPanPerformed;
-            m_inputActions.Viewport.Pan.canceled += OnActionCanceled;
-            m_inputActions.Viewport.Orbit.performed += OnOrbitPerformed;
-            m_inputActions.Viewport.Orbit.canceled += OnActionCanceled;
-            m_inputActions.Viewport.Zoom.performed += OnZoomPerformed;
-            m_inputActions.Viewport.Zoom.canceled += OnActionCanceled;
+
+            m_inputActions.Desktop.Pan.performed += OnPanPerformed;
+            m_inputActions.Desktop.Pan.canceled += OnPanCancelled;
+
+            m_inputActions.Desktop.Orbit.performed += OnOrbitPerformed;
+            m_inputActions.Desktop.Orbit.canceled += OnOrbitCancelled;
+
+            m_inputActions.Desktop.Zoom.performed += OnZoomPerformed;
+            m_inputActions.Desktop.Zoom.canceled += OnZoomCancelled;
+
+            m_inputActions.Desktop.Move.performed += OnMovePerformed;
+            m_inputActions.Desktop.Move.canceled += OnMoveCancelled;
+
+            m_inputActions.Desktop.LookAround.performed += OnLookAroundPerformed;
+            m_inputActions.Desktop.LookAround.canceled += OnLookAroundCancelled;
+
             m_inputActions.Enable();
         }
 
         protected void OnDisable()
         {
             m_inputActions.Disable();
-            m_inputActions.Viewport.Pan.performed -= OnPanPerformed;
-            m_inputActions.Viewport.Pan.canceled -= OnActionCanceled;
-            m_inputActions.Viewport.Orbit.performed -= OnOrbitPerformed;
-            m_inputActions.Viewport.Orbit.canceled -= OnActionCanceled;
-            m_inputActions.Viewport.Zoom.performed -= OnZoomPerformed;
-            m_inputActions.Viewport.Zoom.canceled -= OnActionCanceled;
+
+            m_inputActions.Desktop.Pan.performed -= OnPanPerformed;
+            m_inputActions.Desktop.Pan.canceled -= OnPanCancelled;
+
+            m_inputActions.Desktop.Orbit.performed -= OnOrbitPerformed;
+            m_inputActions.Desktop.Orbit.canceled -= OnOrbitCancelled;
+
+            m_inputActions.Desktop.Zoom.performed -= OnZoomPerformed;
+            m_inputActions.Desktop.Zoom.canceled -= OnZoomCancelled;
+
+            m_inputActions.Desktop.Move.performed -= OnMovePerformed;
+            m_inputActions.Desktop.Move.canceled -= OnMoveCancelled;
+
+            m_inputActions.Desktop.LookAround.performed -= OnLookAroundPerformed;
+            m_inputActions.Desktop.LookAround.canceled -= OnLookAroundCancelled;
+
             m_inputActions = null;
         }
 
         protected void Start()
         {
-            Vector3 angles = transform.eulerAngles;
-            m_orbitYaw = angles.y;
-            m_orbitPitch = angles.x;
+            m_orbitYaw = transform.eulerAngles.y;
+            m_orbitPitch = transform.eulerAngles.x;
             m_zoomDistance = Vector3.Distance(m_targetPosition, transform.position);
             UpdateCameraPosition();
         }
 
         protected void Update()
         {
-            switch (m_interactionMode) 
-            {
-                case InteractionMode.Pan:
-                    {
-                        Vector3 right = transform.right;
-                        Vector3 up = transform.up;
-                        Vector3 pan = (-right * m_panInput.x - up * m_panInput.y) * m_panSpeed * Time.deltaTime;
-                        m_targetPosition += pan * m_zoomDistance;
-                        break;
-                    }
-                case InteractionMode.Orbit:
-                    {
-                        m_orbitYaw += m_orbitInput.x * m_orbitSpeed * Time.deltaTime;
-                        m_orbitPitch -= m_orbitInput.y * m_orbitSpeed * Time.deltaTime;
-                        m_orbitPitch = Mathf.Clamp(m_orbitPitch, -85f, 85f);
-                        break;
-                    }
-                case InteractionMode.Zoom:
-                    {
-                        m_zoomDistance = Mathf.Max(m_zoomDistance + (-m_zoomInput * Mathf.Pow(m_zoomDistance, 0.25f) * m_zoomSpeed), m_minZoomDistance);
-                        break;
-                    }
-            }
-
+            ProcessInputs();
             UpdateCameraPosition();
         }
         
@@ -163,13 +132,13 @@ namespace Miris.Runtime
         private void OnPanPerformed(InputAction.CallbackContext context)
         {
             m_panInput = context.ReadValue<Vector2>();
-            m_interactionMode = InteractionMode.Pan;
+            m_interactionMode |= InteractionMode.Pan;
         }
 
         private void OnOrbitPerformed(InputAction.CallbackContext context)
         {
             m_orbitInput = context.ReadValue<Vector2>();
-            m_interactionMode = InteractionMode.Orbit;
+            m_interactionMode |= InteractionMode.Orbit;
         }
 
         private void OnZoomPerformed(InputAction.CallbackContext context)
@@ -178,23 +147,111 @@ namespace Miris.Runtime
             float magnitude = Math.Max(Mathf.Abs(mouseDelta.x), Mathf.Abs(mouseDelta.y));
             float sign = Mathf.Sign(mouseDelta.x + mouseDelta.y);
             m_zoomInput = magnitude * sign;
-            m_interactionMode = InteractionMode.Zoom;
+            m_interactionMode |= InteractionMode.Zoom;
         }
 
-        private void OnActionCanceled(InputAction.CallbackContext context)
+        private void OnMovePerformed(InputAction.CallbackContext context)
         {
-            m_interactionMode = InteractionMode.None;
+            m_moveInput = context.ReadValue<Vector2>();
+            m_interactionMode |= InteractionMode.Move;
+        }
+
+        private void OnLookAroundPerformed(InputAction.CallbackContext context)
+        {
+            m_lookAroundInput = context.ReadValue<Vector2>();
+            m_interactionMode |= InteractionMode.LookAround;
+        }
+
+        private void OnOrbitCancelled(InputAction.CallbackContext context)
+        {
+            m_orbitInput = new Vector2(0, 0);
+            m_interactionMode &= ~InteractionMode.Orbit;
+        }
+
+        private void OnPanCancelled(InputAction.CallbackContext context)
+        {
+            m_panInput = new Vector2(0, 0);
+            m_interactionMode &= ~InteractionMode.Pan;
+        }
+
+        private void OnZoomCancelled(InputAction.CallbackContext context)
+        {
+            m_zoomInput = 0;
+            m_interactionMode &= ~InteractionMode.Zoom;
+        }
+
+        private void OnMoveCancelled(InputAction.CallbackContext context)
+        {
+            m_moveInput = new Vector2(0, 0);
+            m_interactionMode &= ~InteractionMode.Move;
+        }
+
+        private void OnLookAroundCancelled(InputAction.CallbackContext context)
+        {
+            m_lookAroundInput = new Vector2(0, 0);
+            m_interactionMode &= ~InteractionMode.LookAround;
+        }
+
+        private void ProcessInputs()
+        {
+            if ((m_interactionMode & InteractionMode.Pan) != 0)
+            {
+                Vector3 right = transform.right;
+                Vector3 up = transform.up;
+                Vector3 pan = (-right * m_panInput.x - up * m_panInput.y) * m_panSpeed * Time.deltaTime;
+                m_targetPosition += pan * m_zoomDistance;
+            }
+
+            if ((m_interactionMode & InteractionMode.Orbit) != 0)
+            {
+                m_orbitYaw += m_orbitInput.x * m_orbitSpeed * Time.deltaTime;
+                m_orbitPitch -= m_orbitInput.y * m_orbitSpeed * Time.deltaTime;
+                m_orbitPitch = Mathf.Clamp(m_orbitPitch, -85f, 85f);
+            }
+
+            if ((m_interactionMode & InteractionMode.Zoom) != 0)
+            {
+                m_zoomDistance = Mathf.Max(m_zoomDistance + (-m_zoomInput * Mathf.Pow(m_zoomDistance, 0.25f) * m_zoomSpeed), m_minZoomDistance);
+            }
+
+            if ((m_interactionMode & InteractionMode.LookAround) != 0)
+            {
+                // Rotate the forward vector based on input
+                float yawDelta = m_lookAroundInput.x * Time.deltaTime * m_lookAroundSpeed;
+                float pitchDelta = -m_lookAroundInput.y * Time.deltaTime * m_lookAroundSpeed;
+                
+                // Apply the deltas directly to orbit angles
+                m_orbitYaw += yawDelta;
+                m_orbitPitch += pitchDelta;
+                m_orbitPitch = Mathf.Clamp(m_orbitPitch, -85f, 85f);
+                
+                // Update target position to maintain distance
+                Quaternion rotation = Quaternion.Euler(m_orbitPitch, m_orbitYaw, 0f);
+                Vector3 direction = rotation * Vector3.forward;
+                Debug.Log($"{transform.position}, {m_zoomDistance}, {direction}");
+                m_targetPosition = transform.position + direction * m_zoomDistance;
+            }
+
+            if ((m_interactionMode & InteractionMode.Move) != 0)
+            {
+                // Handle move
+                Vector3 forward = transform.forward;
+                Vector3 right = transform.right;
+
+                forward *= m_moveInput.y * Time.deltaTime * m_moveSpeed;
+                right *= m_moveInput.x * Time.deltaTime * m_moveSpeed;
+
+                m_targetPosition += forward;
+                m_targetPosition += right;
+            }
         }
 
         private void UpdateCameraPosition()
         {
-            if(m_xrOrigin == null){
-                Quaternion rotation = Quaternion.Euler(m_orbitPitch, m_orbitYaw, 0f);
-                rotation = (!m_frameDirectionFlipped) ? rotation : Quaternion.Euler(0f, 180f, 0f) * rotation;
-                Vector3 dir = rotation * Vector3.back;
-                transform.position = m_targetPosition + dir * m_zoomDistance;
-                transform.rotation = rotation;
-            }
+            Quaternion rotation = Quaternion.Euler(m_orbitPitch, m_orbitYaw, 0f);
+            Vector3 direction = rotation * Vector3.back;
+            transform.position = m_targetPosition + direction * m_zoomDistance;
+            transform.rotation = rotation;
         }
 
         private float CalculateFrameDistance(Bounds bounds)

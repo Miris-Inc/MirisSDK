@@ -103,11 +103,11 @@ namespace Miris.Runtime
 
             if (IsDeveloperMode())
             {
-                m_playerInputActions.Player.MinMaxDeveloperInterface.performed += OnMinMaxDeveloperInterfacePerformed;
+                m_playerInputActions.XR.MinMaxDeveloperInterface.performed += OnMinMaxDeveloperInterfacePerformed;
             }
-            m_playerInputActions.Player.MinMaxUserInterface.performed += OnMinMaxUserInterfacePerformed;
-            m_playerInputActions.Player.AttemptClearScene.performed += OnClearScenePerformed;
-            m_playerInputActions.Player.AttemptClearScene.canceled += OnClearSceneCancelled;
+            m_playerInputActions.XR.MinMaxUserInterface.performed += OnMinMaxUserInterfacePerformed;
+            m_playerInputActions.XR.AttemptClearScene.performed += OnClearScenePerformed;
+            m_playerInputActions.XR.AttemptClearScene.canceled += OnClearSceneCancelled;
             m_playerInputActions.Enable();
 
         }

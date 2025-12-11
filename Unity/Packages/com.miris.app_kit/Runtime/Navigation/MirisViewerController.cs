@@ -20,8 +20,7 @@ namespace Miris.Runtime
         [SerializeField]
         private ViewportCameraController m_cameraController;
         
-
-        private ViewportInputActions m_inputActions;
+        private PlayerInputActions m_inputActions;
 
         [SerializeField]
         private UserInterfaceManager m_toggleMenuButton;
@@ -39,9 +38,9 @@ namespace Miris.Runtime
         protected void OnEnable()
         {
             m_inputActions = new();
-            m_inputActions.Viewport.Frame.performed += OnFramePerformed;
+            m_inputActions.Desktop.Frame.performed += OnFramePerformed;
             #if UNITY_EDITOR
-            m_inputActions.Viewport.ToggleCulling.performed += OnToggleCullingPerformed;
+            m_inputActions.Desktop.ToggleCulling.performed += OnToggleCullingPerformed;
             #endif
             m_inputActions.Enable();
 
@@ -51,9 +50,9 @@ namespace Miris.Runtime
         protected void OnDisable()
         {
             m_inputActions.Disable();
-            m_inputActions.Viewport.Frame.performed -= OnFramePerformed;
+            m_inputActions.Desktop.Frame.performed -= OnFramePerformed;
             #if UNITY_EDITOR
-            m_inputActions.Viewport.ToggleCulling.performed -= OnToggleCullingPerformed;
+            m_inputActions.Desktop.ToggleCulling.performed -= OnToggleCullingPerformed;
             #endif
             m_inputActions = null;
         }

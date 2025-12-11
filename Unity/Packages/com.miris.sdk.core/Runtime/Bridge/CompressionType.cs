@@ -38,7 +38,8 @@ namespace Miris.Runtime {
         TEX_ASTC_8x8_SFLOAT_BLOCK,
         TEX_ASTC_10x10_SFLOAT_BLOCK,
         TEX_ASTC_12x12_SFLOAT_BLOCK,
-        TEX_ASTC_END = TEX_ASTC_12x12_SFLOAT_BLOCK // End of ASTC compression types
+        TEX_ASTC_END = TEX_ASTC_12x12_SFLOAT_BLOCK, // End of ASTC compression types
+        SPARK_PACKED_SPLAT,
     }
 
 #if __LINE__
