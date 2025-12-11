@@ -4210,9 +4210,6 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 5866301621584679668, guid: 61153876cfaa44573920a4b96cc9f79d, type: 3}
       insertIndex: -1
       addedObject: {fileID: 3146171725960133941}
-    - targetCorrespondingSourceObject: {fileID: 5866301621584679668, guid: 61153876cfaa44573920a4b96cc9f79d, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 3146171725960133942}
   m_SourcePrefab: {fileID: 100100000, guid: 61153876cfaa44573920a4b96cc9f79d, type: 3}
 --- !u!20 &3146171725960133927 stripped
 Camera:
@@ -4303,35 +4300,6 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ab11a75ab78fd437ea7b02c92f8ba1ad, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
---- !u!114 &3146171725960133942
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1680948201}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e979cddcbb36a1ca2811d46a89944b74, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_targetPosition: {x: 0, y: 0, z: 0}
-  m_orbitSpeed: 5
-  m_panSpeed: 0.3
-  m_zoomSpeed: 2
-  m_minZoomDistance: 0.1
-  m_xrOrigin: {fileID: 3146171725960133948}
---- !u!114 &3146171725960133948 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 4831628830618034465, guid: 61153876cfaa44573920a4b96cc9f79d, type: 3}
-  m_PrefabInstance: {fileID: 3146171725960133924}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 329793517}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e0cb9aa70a22847b5925ee5f067c10a9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
 --- !u!1 &3325423909317110946

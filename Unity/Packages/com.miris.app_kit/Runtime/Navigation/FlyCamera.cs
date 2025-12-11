@@ -37,12 +37,12 @@ namespace Miris.Runtime
                 m_playerInputActions = new();
             }
 
-            m_playerInputActions.Player.Move.performed += OnMovePerformed;
-            m_playerInputActions.Player.Move.canceled += OnMoveCanceled;
-            m_playerInputActions.Player.EnableLookAround.performed += OnEnableLookPerformed;
-            m_playerInputActions.Player.EnableLookAround.canceled += OnEnableLookCancelled;
-            m_playerInputActions.Player.LookAround.performed += OnLookAroundPerformed;
-            m_playerInputActions.Player.LookAround.canceled += OnLookAroundCancelled;
+            m_playerInputActions.XR.Move.performed += OnMovePerformed;
+            m_playerInputActions.XR.Move.canceled += OnMoveCanceled;
+            m_playerInputActions.XR.EnableLookAround.performed += OnEnableLookPerformed;
+            m_playerInputActions.XR.EnableLookAround.canceled += OnEnableLookCancelled;
+            m_playerInputActions.XR.LookAround.performed += OnLookAroundPerformed;
+            m_playerInputActions.XR.LookAround.canceled += OnLookAroundCancelled;
             m_playerInputActions.Enable();
         }
 

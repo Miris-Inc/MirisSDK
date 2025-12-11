@@ -29,7 +29,9 @@ namespace Miris.Runtime
         RGBA_Compressed_ASTC_6x6_HDR,
         RGBA_Compressed_ASTC_8x8_HDR,
         RGBA_Compressed_ASTC_10x10_HDR,
-        RGBA_Compressed_ASTC_12x12_HDR
+        RGBA_Compressed_ASTC_12x12_HDR,
+        
+        UInt32x4,
     }
 
     // Extends the AttributeEncoding enum with methods

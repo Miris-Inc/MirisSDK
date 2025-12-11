@@ -43,8 +43,7 @@ namespace Miris.Runtime
         // Cached object ID color for drawing bounding boxes, and other visual features (maybe picking in the future?)
         public float4 m_objectIdColor = new float4(1.0f, 0.0f, 0.0f, 1.0f);
 
-        public int GetSplatCount()
-        {
+        public int GetSplatCount() {
             var positionBuffer = GetBuffer(AttributeSemantic.Position);
             int splatCount = positionBuffer.GetSplatCount();
             if (splatCount > 0) {
@@ -201,6 +200,10 @@ namespace Miris.Runtime
                 case AttributeSemantic.SHCoefficients:
                     {
                         return "sphericalharmonics";
+                    }
+                case AttributeSemantic.SparkPackedSplats:
+                    {
+                        return "sparkPackedSplats";
                     }
                 default:
                     {

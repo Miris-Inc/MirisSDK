@@ -14,7 +14,9 @@ namespace Miris.Runtime
         Scale,
         Orientation,
         Color,
-        SHCoefficients
+        SHCoefficients,
+        
+        SparkPackedSplats,
 
         // Extend this with others like, SphericalHarmonics
     }
@@ -83,14 +85,23 @@ namespace Miris.Runtime
                     }
                 
                 case AttributeSemantic.SHCoefficients:
-                {
-                    return encoding switch
                     {
-                        AttributeEncoding.Float32x3 => true,
-                        AttributeEncoding.Float16x3 => true, 
-                        _ => false
-                    };
-                }
+                        return encoding switch
+                        {
+                            AttributeEncoding.Float32x3 => true,
+                            AttributeEncoding.Float16x3 => true, 
+                            _ => false
+                        };
+                    }
+
+                case AttributeSemantic.SparkPackedSplats:
+                    {
+                        return encoding switch
+                        {
+                            AttributeEncoding.UInt32x4 => true,
+                            _ => false,
+                        };
+                    }
 
                 default:
                     {
@@ -121,6 +132,7 @@ namespace Miris.Runtime
                 AttributeSemantic.Color => AttributeEncoding.Float32x4,
                 AttributeSemantic.BlockBounds => AttributeEncoding.Float32,
                 AttributeSemantic.SHCoefficients => AttributeEncoding.Float32x3,
+                AttributeSemantic.SparkPackedSplats => AttributeEncoding.UInt32x4,
                 _ => throw new ArgumentOutOfRangeException(nameof(AttributeSemantic), semantic.ToString(), null)
             };
         }
