@@ -1164,6 +1164,52 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &2131660148
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2131660150}
+  - component: {fileID: 2131660149}
+  m_Layer: 0
+  m_Name: Miris Player Preferences
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &2131660149
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2131660148}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d844bdda2cf0d46d387540aa2f3cc7a1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_streamController: {fileID: 1138104107}
+  m_stream: {fileID: 2004831072}
+--- !u!4 &2131660150
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2131660148}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &514490946377201385
 Transform:
   m_ObjectHideFlags: 0
@@ -1710,7 +1756,8 @@ PrefabInstance:
       value: 25
       objectReference: {fileID: 0}
     m_RemovedComponents: []
-    m_RemovedGameObjects: []
+    m_RemovedGameObjects:
+    - {fileID: 3191520044804747870, guid: 61153876cfaa44573920a4b96cc9f79d, type: 3}
     m_AddedGameObjects:
     - targetCorrespondingSourceObject: {fileID: 4460136922202601369, guid: 61153876cfaa44573920a4b96cc9f79d, type: 3}
       insertIndex: -1
@@ -1915,3 +1962,4 @@ SceneRoots:
   - {fileID: 1356636168}
   - {fileID: 2239447913975328417}
   - {fileID: 1228243421}
+  - {fileID: 2131660150}

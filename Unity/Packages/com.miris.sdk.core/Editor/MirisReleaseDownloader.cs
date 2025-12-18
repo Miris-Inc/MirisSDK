@@ -47,9 +47,10 @@ namespace Miris.Editor
         private static bool IsDmg(string name) { return name != null && name.EndsWith(".dmg", StringComparison.OrdinalIgnoreCase); }
 
         // Config for fetching repo
+        private static readonly string artifactName = "UnitySDK";
         private static string owner = "miris-inc";
         private static string repo = "MirisSDK";
-        private static string tag = "library@v0.0.9";
+        private static string tag = $"{artifactName}@v0.0.9";
         private static string githubToken = ""; // optional
         private static bool hideToken = true;
 
@@ -105,7 +106,7 @@ namespace Miris.Editor
             var packageVersion = GetPackageVersion();
             if (string.IsNullOrEmpty(packageVersion))
                 throw new Exception("There was an issue trying to confirm the correct version of the Miris package.");
-            tag = $"library@v{packageVersion}";
+            tag = $"{artifactName}@v{packageVersion}";
             
             // Todo: Once the repo is public, allow auto downloads
             //if(Directory.Exists(MirisFolder) || EditorPrefs.GetBool(StartupWindow.DoNotAutoDownloadPrefsKey))
@@ -129,16 +130,8 @@ namespace Miris.Editor
             {
                 owner = EditorGUILayout.TextField("Owner", owner);
                 repo  = EditorGUILayout.TextField("Repo",  repo);
-                tag   = EditorGUILayout.TextField(new GUIContent("Tag", "Required. e.g. library@v0.0.9"), tag);
-
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    hideToken = EditorGUILayout.ToggleLeft("Hide token", hideToken, GUILayout.Width(90));
-                    githubToken = hideToken
-                        ? EditorGUILayout.PasswordField(new GUIContent("GitHub Token"), githubToken)
-                        : EditorGUILayout.TextField(new GUIContent("GitHub Token"), githubToken);
-                }
-
+                tag   = EditorGUILayout.TextField(new GUIContent("Tag", $"Required. e.g. {artifactName}@v0.0.9"), tag);
+                
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     expressInstall = EditorGUILayout.ToggleLeft("Express Install", expressInstall, GUILayout.Width(120));

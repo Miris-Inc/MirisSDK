@@ -22,12 +22,23 @@ namespace Miris.Runtime
 
         private ClientHandle m_handle = System.IntPtr.Zero;
 
+        /// Unity does not seem to allow the user to modify these global scene settings
+        private SpatialFormat PrepareSpatialFormat()
+        {
+            return new SpatialFormat{
+                m_upAxis = UpAxis.Y,
+                m_metersPerUnit = 1.0f,
+                m_matrixOrder = MatrixOrder.ColumnMajor
+            };
+        }
+
         public Client()
         {
             MirisDebug.Log("Creating Client");
             try
             {
                 m_handle = MirisApi.CreateClient();
+                SetClientSpatialFormat(PrepareSpatialFormat());
             }
             catch (DllNotFoundException ex)
             {
@@ -81,7 +92,7 @@ namespace Miris.Runtime
         {
             if (m_handle != System.IntPtr.Zero)
             {
-                MirisDebug.Log("Destroying AquaClient");
+                MirisDebug.Log("Destroying MirisClient");
                 MirisApi.DestroyClient(m_handle);
                 m_handle = System.IntPtr.Zero;
             }
@@ -104,21 +115,6 @@ namespace Miris.Runtime
             MirisApi.SetLodRefinementParameters(m_handle, ref refinementParameters);
         }
 
-        public void performThroughputTest(string payload, string deviceId)
-        {
-            MirisApi.PerformThroughputTest(m_handle, payload, deviceId);
-        }
-
-        /// <summary>
-        /// Tells the C API where the USD path and plugins are stored.
-        /// See <see cref="StartupLoader"/>
-        /// </summary>
-        /// <param name="payload">The USD path</param>
-        public void SetUsdPath(string payload)
-        {
-            MirisApi.SetUsdPath(m_handle, payload);
-        }
-
         /// <summary>
         /// Gives the SDK a path to a directory to which it can write persistent data.
         /// </summary>
@@ -127,16 +123,6 @@ namespace Miris.Runtime
         public bool SetPersistentDataDirectory(string dirPath)
         {
             return MirisApi.SetPersistentDataDirectory(m_handle, dirPath);
-        }
-
-        /// <summary>
-        /// Runs a throughput test. For Miris internal use.
-        /// </summary>
-        /// <param name="payload">A JSON object, for configuring the test</param>
-        /// <param name="deviceId">A unique identifier for the client device. Usually <see cref="SystemInfo.deviceUniqueIdentifier"/></param>
-        public void PerformThroughputTest(string payload, string deviceId)
-        {
-            MirisApi.PerformThroughputTest(m_handle, payload, deviceId);
         }
 
         /// <summary>
@@ -364,6 +350,10 @@ namespace Miris.Runtime
         public void GetSceneMetadata(ref SceneMetadata metadata)
         {
             MirisApi.GetSceneMetadata(m_handle, ref metadata);
+        }
+        public void SetClientSpatialFormat(SpatialFormat spatialFormat)
+        {
+            MirisApi.SetClientSpatialFormat(m_handle, spatialFormat);
         }
     }
 }

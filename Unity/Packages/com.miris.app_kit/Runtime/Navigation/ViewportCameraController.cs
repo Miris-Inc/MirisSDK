@@ -13,12 +13,12 @@ namespace Miris.Runtime
         public Vector3 m_targetPosition = new Vector3(0, 0, 0);
 
         [Header("Orbit")]
-        public float m_orbitSpeed = 5f;
+        public float m_orbitSpeed = 200f;
         private float m_orbitYaw = 0f;
         private float m_orbitPitch = 0f;
 
         [Header("Pan")]
-        public float m_panSpeed = 0.3f;
+        public float m_panSpeed = 2f;
 
         [Header("Zoom")]
         public float m_zoomSpeed = 2f;
@@ -26,10 +26,10 @@ namespace Miris.Runtime
         public float m_minZoomDistance = 0.1f;
 
         [Header("Move")]
-        public float m_moveSpeed = 1.0f;
+        public float m_moveSpeed = 10.0f;
 
         [Header("Look Around")]
-        public float m_lookAroundSpeed = 10.0f;
+        public float m_lookAroundSpeed = 200.0f;
 
         private PlayerInputActions m_inputActions;
 
@@ -52,6 +52,9 @@ namespace Miris.Runtime
         private Vector2 m_moveInput;
         private Vector2 m_lookAroundInput;
 
+        // DPI Value used to compute final sensitivity of the various inputs.
+        const float c_referenceDpi = 96;
+        private float m_mouseInputSensitivity = 1.0f;
 
         // --------------------------------------------------------------------
         // Public
@@ -113,6 +116,7 @@ namespace Miris.Runtime
 
         protected void Start()
         {
+            CalculateMouseInputSensitivity(); 
             m_orbitYaw = transform.eulerAngles.y;
             m_orbitPitch = transform.eulerAngles.x;
             m_zoomDistance = Vector3.Distance(m_targetPosition, transform.position);
@@ -131,19 +135,19 @@ namespace Miris.Runtime
 
         private void OnPanPerformed(InputAction.CallbackContext context)
         {
-            m_panInput = context.ReadValue<Vector2>();
+            m_panInput = context.ReadValue<Vector2>() * m_mouseInputSensitivity;
             m_interactionMode |= InteractionMode.Pan;
         }
 
         private void OnOrbitPerformed(InputAction.CallbackContext context)
         {
-            m_orbitInput = context.ReadValue<Vector2>();
+            m_orbitInput = context.ReadValue<Vector2>() * m_mouseInputSensitivity;
             m_interactionMode |= InteractionMode.Orbit;
         }
 
         private void OnZoomPerformed(InputAction.CallbackContext context)
         {
-            Vector2 mouseDelta = context.ReadValue<Vector2>();
+            Vector2 mouseDelta = context.ReadValue<Vector2>() * m_mouseInputSensitivity;
             float magnitude = Math.Max(Mathf.Abs(mouseDelta.x), Mathf.Abs(mouseDelta.y));
             float sign = Mathf.Sign(mouseDelta.x + mouseDelta.y);
             m_zoomInput = magnitude * sign;
@@ -158,7 +162,7 @@ namespace Miris.Runtime
 
         private void OnLookAroundPerformed(InputAction.CallbackContext context)
         {
-            m_lookAroundInput = context.ReadValue<Vector2>();
+            m_lookAroundInput = context.ReadValue<Vector2>() * m_mouseInputSensitivity;
             m_interactionMode |= InteractionMode.LookAround;
         }
 
@@ -219,16 +223,15 @@ namespace Miris.Runtime
                 // Rotate the forward vector based on input
                 float yawDelta = m_lookAroundInput.x * Time.deltaTime * m_lookAroundSpeed;
                 float pitchDelta = -m_lookAroundInput.y * Time.deltaTime * m_lookAroundSpeed;
-                
+
                 // Apply the deltas directly to orbit angles
                 m_orbitYaw += yawDelta;
                 m_orbitPitch += pitchDelta;
                 m_orbitPitch = Mathf.Clamp(m_orbitPitch, -85f, 85f);
-                
+
                 // Update target position to maintain distance
                 Quaternion rotation = Quaternion.Euler(m_orbitPitch, m_orbitYaw, 0f);
                 Vector3 direction = rotation * Vector3.forward;
-                Debug.Log($"{transform.position}, {m_zoomDistance}, {direction}");
                 m_targetPosition = transform.position + direction * m_zoomDistance;
             }
 
@@ -244,6 +247,15 @@ namespace Miris.Runtime
                 m_targetPosition += forward;
                 m_targetPosition += right;
             }
+        }
+        
+        private void CalculateMouseInputSensitivity()
+        {
+            // The higher the DPI, the LESS sentitive we need to make the inputs.
+            // As the input delta values are in pixels, the same physical
+            // movement of a mouse on higher DPI will yield higher values.
+            float screenDpi = Screen.dpi != 0 ? Screen.dpi : c_referenceDpi;
+            m_mouseInputSensitivity = c_referenceDpi / screenDpi;
         }
 
         private void UpdateCameraPosition()

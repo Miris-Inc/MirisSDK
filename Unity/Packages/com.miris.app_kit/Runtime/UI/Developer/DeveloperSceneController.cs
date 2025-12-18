@@ -16,9 +16,6 @@ namespace Miris.Runtime
     {
         // extraneous references
         [SerializeField]
-        public MirisPlayerController m_playerController;
-
-        [SerializeField]
         public MirisStreamController m_streamController;
 
         [SerializeField]
