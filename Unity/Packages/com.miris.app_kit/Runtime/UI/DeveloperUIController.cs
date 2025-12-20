@@ -36,8 +36,6 @@ namespace Miris.Runtime
         [SerializeField]
         public TMP_Text m_buildVersionText;
 
-        [SerializeField]
-        public MirisPlayerController m_playerController;
 
         [SerializeField]
         public MirisStreamController m_streamController;
@@ -210,7 +208,6 @@ namespace Miris.Runtime
 
         private void OnRestoreDefaultSettingsClicked()
         {
-            m_playerController.RestoreDefaultPreferences();
             m_mirisPlayerPrefs.RestoreDefaultPreferences();
         }
 
