@@ -69,7 +69,7 @@ namespace Miris.Runtime
     
     /// <summary>
     /// Details the Miris C# API for Unity.
-    /// See $AQUA_ROOT/modules/AquaApi/include/AquaApi/AquaSceneC.h
+    /// See $AQUA_ROOT/modules/AquaApi/include/AquaApi/AquaApi.h
     /// for the corresponding C API.
     /// </summary>
     public class MirisApi
@@ -129,13 +129,10 @@ namespace Miris.Runtime
         static public extern void DestroyClient(ClientHandle client);
 
         [DllImport(AquaUnityPath)]
-        static public extern void SetUsdPath(ClientHandle client, string payload);
-
-        [DllImport(AquaUnityPath)]
         static public extern bool SetPersistentDataDirectory(ClientHandle client, string dirPath);
 
         [DllImport(AquaUnityPath)]
-        static public extern void PerformThroughputTest(ClientHandle client, string payload, string deviceId);
+        static public extern void SetClientSpatialFormat(ClientHandle client, SpatialFormat spatialFormat);
 
         // ---------------------------------------------------------------
         // Asset Management API

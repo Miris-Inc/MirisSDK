@@ -23,9 +23,6 @@ namespace Miris.Runtime
         [SerializeField]
         private MirisPlayerPreferences m_mirisPlayerPrefs;
 
-        [SerializeField]
-        private MirisPlayerController m_playerController;
-
         // UI Toggles
         [SerializeField]
         private Toggle m_fadeLargeSplatsToggle;

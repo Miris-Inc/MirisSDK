@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 
-// Aqua package
+// Miris package
 using Miris.Runtime;
 
 namespace Miris.Editor
