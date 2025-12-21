@@ -109,7 +109,7 @@ namespace Miris.Runtime
         public void GetMetadata(out AssetMetadata metadata)
         {
             metadata = new AssetMetadata();
-            m_client.GetMetadata(m_sceneObjectId, ref metadata);
+            m_client.GetMetadata(m_sceneObjectId, metadata);
         }
 
         public void SetTransform(Matrix4x4 transform)
