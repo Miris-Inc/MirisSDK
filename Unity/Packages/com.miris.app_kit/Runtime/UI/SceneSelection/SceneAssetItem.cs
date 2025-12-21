@@ -10,7 +10,7 @@ namespace Miris.Runtime
     public class SceneAssetItem : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
     {
         private SceneAssetInfo m_assetInfo;
-        private MirisPlayerSceneManager m_sceneManager;
+        private MirisStream m_stream;
         private UserInterfaceManager m_uiManager;
         private MobileUserInterfaceManager m_mobileUIManager;
         public void SetAssetInfo(SceneAssetInfo assetInfo)
@@ -24,14 +24,14 @@ namespace Miris.Runtime
 
         public void Start()
         {
-            m_sceneManager = FindFirstObjectByType<MirisPlayerSceneManager>();
+            m_stream = FindFirstObjectByType<MirisStream>();
             m_uiManager = GetComponentInParent<UserInterfaceManager>();
             m_mobileUIManager = GetComponentInParent<MobileUserInterfaceManager>();
         }
 
         public void OnPointerClick(PointerEventData eventData)
         {
-            if (m_sceneManager != null)
+            if (m_stream != null)
             {
                 HapticsUtility.SendHapticImpulse(0.5f, 0.025f, HapticsUtility.Controller.Both);
                 if(m_uiManager != null){
@@ -41,7 +41,7 @@ namespace Miris.Runtime
                     m_mobileUIManager.SetCurrentAssetInfo(m_assetInfo);
                     m_mobileUIManager.ClearUserInterfaceState();
                 }
-                m_sceneManager.ChangeScene(m_assetInfo.m_assetId);
+                m_stream.m_assetId = m_assetInfo.m_assetId;
             }
         }
         public void OnPointerEnter(PointerEventData eventData)

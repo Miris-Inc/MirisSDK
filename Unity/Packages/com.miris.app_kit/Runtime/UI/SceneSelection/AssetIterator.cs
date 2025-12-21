@@ -11,13 +11,9 @@ namespace Miris.Runtime
         private int m_currentAssetIndex = 0;
         private AssetInfo[] m_currentAssets;
 
-        public async Task<AssetInfo[]> LoadAssets(AssetManager assetManager, MirisPlayerSceneManager sceneManager = null)
+        public async Task<AssetInfo[]> LoadAssets(AssetManager assetManager)
         {
             m_currentAssets = await assetManager.GetAssets();
-            if(m_currentAssets.Length > 0 && sceneManager != null)
-            {
-                sceneManager.ChangeScene(m_currentAssets[0].m_uuid);
-            }
             return m_currentAssets;
         }
 

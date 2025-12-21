@@ -136,31 +136,32 @@ namespace Miris.Runtime
         }
 
         /// <summary>
-        /// Retrieve all available assets from the server environment.
+        /// Retrieve all available assets from the server environment (blocking).
         /// </summary>
-        /// <param name="tags">An optional array of tags for filtering the assets that are retrieved.
+        /// <param name="tags">A vector of tags for filtering the assets that are retrieved.
         /// The tags are combined using the AND operator, i.e. they are exclusive filters.</param>
-        /// <param name="tagsCount">The number of tags</param>
-        /// <param name="callback">This callback will be invoked and supplied with the scene data when it is ready</param>
-        /// <param name="userData"></param>
-        public void GetAssets(IntPtr tags, int tagsCount, FillNativeArrayCallback callback, IntPtr userData)
+        /// <returns>Vector of AssetInfo structs</returns>
+        public AssetInfoVector GetAssets(StringVector tags)
         {
-            MirisApi.GetAssets(m_handle, tags, tagsCount, callback, userData);
+            return MirisBindings.GetAssets(m_handle, tags);
         }
 
         /// <summary>
-        /// Get all available server environment names.
+        /// Get all available server environment names (blocking).
         /// </summary>
-        /// <param name="callback">Callback for handling retrieved server environment names</param>
-        /// <param name="userData"></param>
-        public void GetAvailableEnvironments(FillNativeArrayCallback callback, IntPtr userData)
+        /// <returns>Vector of environment name strings</returns>
+        public StringVector GetAvailableEnvironments()
         {
-            MirisApi.GetAvailableEnvironments(m_handle, callback, userData);
+            return MirisBindings.GetAvailableEnvironments(m_handle);
         }
 
-        public void GetAvailableTags(FillNativeArrayCallback callback, IntPtr userData)
+        /// <summary>
+        /// Get all unique tags from available assets (blocking).
+        /// </summary>
+        /// <returns>Vector of tag strings</returns>
+        public StringVector GetAvailableTags()
         {
-            MirisApi.GetAvailableTags(m_handle, callback, userData);
+            return MirisBindings.GetAvailableTags(m_handle);
         }
 
         public IntPtr GetDefaultEnvironment()
@@ -189,9 +190,9 @@ namespace Miris.Runtime
             return MirisApi.AddStream(m_handle, streamName, contentUrl, clientType, doNotRefine);
         }
 
-        public int AddStreamById(string streamName, string assetId, int clientType, bool doNotRefine, AddStreamCallback callback, IntPtr userData)
+        public int AddStreamById(string streamName, string assetId, int clientType, bool doNotRefine)
         {
-            return MirisApi.AddStreamById(m_handle, streamName, assetId, clientType, doNotRefine, callback, userData);
+            return MirisApi.AddStreamById(m_handle, streamName, assetId, clientType, doNotRefine);
         }
 
         public bool RemoveStream(int streamObjectId)
@@ -317,9 +318,9 @@ namespace Miris.Runtime
             MirisApi.GetTransform(m_handle, sceneObjectId, transformData);
         }
 
-        public void GetMetadata(int sceneObjectId, ref AssetMetadata metadata)
+        public void GetMetadata(int sceneObjectId, AssetMetadata metadata)
         {
-            MirisApi.GetMetadata(m_handle, sceneObjectId, ref metadata);
+            MirisBindings.GetMetadata(m_handle, sceneObjectId, metadata);
         }
 
         public void GetBoundingBox(int sceneObjectId, float[] boundingBox)
@@ -347,9 +348,9 @@ namespace Miris.Runtime
             return MirisApi.GetSceneOperatorCount(m_handle);
         }
 
-        public void GetSceneMetadata(ref SceneMetadata metadata)
+        public void GetSceneMetadata(SceneMetadata metadata)
         {
-            MirisApi.GetSceneMetadata(m_handle, ref metadata);
+            MirisBindings.GetSceneMetadata(m_handle, metadata);
         }
         public void SetClientSpatialFormat(SpatialFormat spatialFormat)
         {
