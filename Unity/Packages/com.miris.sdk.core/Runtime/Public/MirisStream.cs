@@ -159,7 +159,7 @@ namespace Miris.Runtime
                 action.Invoke();
             }
 
-            await m_streamController.AddStreamById(this, m_assetId);
+            m_streamController.AddStreamById(this, m_assetId);
         }
 
         /// <summary>

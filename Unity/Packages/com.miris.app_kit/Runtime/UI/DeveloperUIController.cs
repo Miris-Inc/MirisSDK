@@ -26,6 +26,11 @@ namespace Miris.Runtime
             public Action listener;
         }
 
+        [SerializeField]
+        private List<GameObject> m_panels;
+        [SerializeField]
+        private List<Button> m_buttons;
+
         private List<ButtonPanelPair> m_panelButtonSets = new List<ButtonPanelPair>();
 
         // extraneous references
@@ -43,39 +48,6 @@ namespace Miris.Runtime
         [SerializeField]
         private MirisPlayerPreferences m_mirisPlayerPrefs;
 
-        [SerializeField]
-        private GameObject m_scenePanel;
-
-
-        [SerializeField]
-        private GameObject m_streamingPanel;
-
-        [SerializeField]
-        private GameObject m_diagnosticsPanel;
-
-        [SerializeField]
-        private GameObject m_lodPanel;
-
-        [SerializeField]
-        private GameObject m_graphicsPanel;
-
-
-        // UI Buttons
-        [SerializeField]
-        private Button m_scenePanelButton;
-
-        [SerializeField]
-        private Button m_streamingPanelButton;
-
-        [SerializeField]
-        private Button m_diagnosticsPanelButton;
-
-        [SerializeField]
-        private Button m_lodPanelButton;
-
-        [SerializeField]
-        private Button m_graphicsPanelButton;
-
         // --------------------------------------------------------------------
         // Unity event handling
         // --------------------------------------------------------------------
@@ -85,7 +57,7 @@ namespace Miris.Runtime
             InitializeUI();
 
             // On start-up, let the scene tab be the active one.
-            m_scenePanelButton.onClick.Invoke();
+            m_buttons[0].onClick.Invoke();
         }
 
         void Update()
@@ -107,43 +79,17 @@ namespace Miris.Runtime
         private void InitializeUI()
         {
             InitializeBuildVersionText();
-            m_restoreDefaultSettingsButton.onClick.AddListener(OnRestoreDefaultSettingsClicked);
+            m_restoreDefaultSettingsButton?.onClick.AddListener(OnRestoreDefaultSettingsClicked);
 
-            // initalize panel button tabs
-            m_panelButtonSets.Add(new ButtonPanelPair
+            for (int buttonIndex = 0; buttonIndex < m_buttons.Count; buttonIndex++)
             {
-                button = m_scenePanelButton,
-                panel = m_scenePanel,
-                listener = () => OnPanelButtonClicked(0)
-            });
-
-            m_panelButtonSets.Add(new ButtonPanelPair
-            {
-                button = m_streamingPanelButton,
-                panel = m_streamingPanel,
-                listener = () => OnPanelButtonClicked(1)
-            });
-
-            m_panelButtonSets.Add(new ButtonPanelPair
-            {
-                button = m_diagnosticsPanelButton,
-                panel = m_diagnosticsPanel,
-                listener = () => OnPanelButtonClicked(2)
-            });
-
-            m_panelButtonSets.Add(new ButtonPanelPair
-            {
-                button = m_lodPanelButton,
-                panel = m_lodPanel,
-                listener = () => OnPanelButtonClicked(3)
-            });
-
-            m_panelButtonSets.Add(new ButtonPanelPair
-            {
-                button = m_graphicsPanelButton,
-                panel = m_graphicsPanel,
-                listener = () => OnPanelButtonClicked(4)
-            });
+                int index = buttonIndex;
+                m_panelButtonSets.Add(new ButtonPanelPair {
+                    button = m_buttons[buttonIndex],
+                    panel = m_panels[buttonIndex],
+                    listener = () => OnPanelButtonClicked(index)
+                });
+            }
 
             for (var i = 0; i < m_panelButtonSets.Count; i++)
             {
