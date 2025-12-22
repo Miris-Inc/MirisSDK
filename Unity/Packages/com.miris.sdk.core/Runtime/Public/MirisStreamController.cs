@@ -33,14 +33,7 @@ namespace Miris.Runtime
         }
         [SerializeField]
         public ExecutionMode m_executionMode = ExecutionMode.Asynchronous;
-        private SceneMetadata m_sceneMetadata = new SceneMetadata
-        {
-            m_highestLodLimit = 0.8f,
-            m_lowestLodLimit = 0.0f,
-            m_lodMaxDistance = 20.0f,
-            m_verticalOffset = 0.0f,
-            m_splatCountBudget = 1000000,
-        };
+        private SceneMetadata m_sceneMetadata;
 
         [SerializeField]
         public LodRefinementParameters m_lodRefinementParameters = new LodRefinementParameters
@@ -196,13 +189,13 @@ namespace Miris.Runtime
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="uuid"></param>
-        internal async Task AddStreamById(MirisStream stream, string uuid)
+        internal void AddStreamById(MirisStream stream, string uuid)
         {
             // Update flags.
             m_updateRenderableObjects = true;
             m_loadedMetadata = false;
 
-            SceneObject streamObject = await m_scene.AddStreamById(stream.name, uuid, doNotRefine: IsEditMode);
+            SceneObject streamObject = m_scene.AddStreamById(stream.name, uuid, doNotRefine: IsEditMode);
 
             MirisDebug.Log($"Got stream object {streamObject}");
 
@@ -256,7 +249,7 @@ namespace Miris.Runtime
         private void GetSceneMetadata()
         {
             // layer in structure file scene metadata values
-            m_scene.GetMetadata(out m_sceneMetadata);
+            m_scene.GetMetadata(m_sceneMetadata);
             m_lodRefinementParameters.m_lodMaxDistance = m_sceneMetadata.m_lodMaxDistance;
             m_lodRefinementParameters.m_highestLodLimit = m_sceneMetadata.m_highestLodLimit;
             m_lodRefinementParameters.m_lowestLodLimit = m_sceneMetadata.m_lowestLodLimit;
@@ -592,6 +585,17 @@ namespace Miris.Runtime
             m_client = new();
             m_scene = new Scene(m_client);
             m_assetManager = new AssetManager(m_client);
+            // SceneMetadata must be created here (not as field initializer) because it's a SWIG type
+            // that triggers P/Invoke on construction. Field initializers run before the native
+            // library is loaded, causing "Plugin loading is only allowed on main thread" errors.
+            m_sceneMetadata = new SceneMetadata
+            {
+                m_highestLodLimit = 0.8f,
+                m_lowestLodLimit = 0.0f,
+                m_lodMaxDistance = 20.0f,
+                m_verticalOffset = 0.0f,
+                m_splatCountBudget = 1000000,
+            };
 
             // Initialize client config.
             m_clientConfig = ClientConfig.Load();
@@ -634,6 +638,8 @@ namespace Miris.Runtime
             // Teardown API objects
             m_assetManager = null;
             m_scene = null;
+            m_sceneMetadata?.Dispose();
+            m_sceneMetadata = null;
 
             // Teardown the client instance
             m_client.Dispose();

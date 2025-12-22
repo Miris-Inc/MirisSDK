@@ -7,32 +7,14 @@ using System.Threading.Tasks;
 
 namespace Miris.Runtime
 {
-    public class AssetManager
+    public class AssetManager : IDisposable
     {
-        private Client m_client;
+        private readonly Client m_client;
         private string m_selectedEnvironment;
         public string SelectedEnvironment => m_selectedEnvironment;
-        private string[] m_tags = new string[] { };
+        private StringVector m_tags = new StringVector();
         public event Action<string> ServerEnvironmentChanged;
         public event Action TagsChanged;
-
-        [MonoPInvokeCallback(typeof(FillNativeArrayCallback))]
-        private static void GetAssetsCallback(IntPtr ptr, int count, IntPtr userData)
-        {
-            InteropUtils.NativeAsyncCallbackArray<AssetInfo>(ptr, count, userData);
-        }
-
-        [MonoPInvokeCallback(typeof(FillNativeArrayCallback))]
-        private static void GetAvailableEnvironmentsCallback(IntPtr ptr, int count, IntPtr userData)
-        {
-            InteropUtils.NativeAsyncCallbackStringArray(ptr, count, userData);
-        }
-
-        [MonoPInvokeCallback(typeof(FillNativeArrayCallback))]
-        private static void GetAvailableTagsCallback(IntPtr ptr, int count, IntPtr userData)
-        {
-            InteropUtils.NativeAsyncCallbackStringArray(ptr, count, userData);
-        }
 
         [MonoPInvokeCallback(typeof(SetServerEnvironmentCallback))]
         private static void SetServerEnvironmentCallback(bool success, IntPtr userData)
@@ -49,37 +31,116 @@ namespace Miris.Runtime
             m_selectedEnvironment = GetDefaultEnvironment();
         }
 
+        public void Dispose()
+        {
+            m_tags?.Dispose();
+            m_tags = null;
+        }
+
+        /// <summary>
+        /// Get all available assets from the server environment.
+        /// Runs blocking native call on background thread to avoid blocking Unity main thread.
+        /// </summary>
         public Task<AssetInfo[]> GetAssets()
         {
-            var tcs = new TaskCompletionSource<AssetInfo[]>();
-
-            var handle = GCHandle.Alloc(tcs);
-            using (StringArrayInterop tagsInterop = new (m_tags))
+            // Capture tag strings (not SWIG objects) for use in background thread
+            var tagStrings = new string[(int)m_tags.Count];
+            for (int i = 0; i < (int)m_tags.Count; i++)
             {
-                m_client.GetAssets(tagsInterop.GetUnmanagedStringArray(), m_tags.Length, GetAssetsCallback, GCHandle.ToIntPtr(handle));
+                tagStrings[i] = m_tags[i];
             }
 
-            return tcs.Task;
+            // Capture client handle for background thread
+            var client = m_client;
+
+            return Task.Run(() =>
+            {
+                // Create SWIG objects on the same thread where they'll be used
+                using (var tags = new StringVector())
+                {
+                    foreach (var tag in tagStrings)
+                    {
+                        tags.Add(tag);
+                    }
+
+                    using (var result = client.GetAssets(tags))
+                    {
+                        // Create new AssetInfo objects with copied string data
+                        // We must read all string properties BEFORE disposing the vector
+                        // because the vector owns the native memory for the strings
+                        var assets = new AssetInfo[(int)result.Count];
+                        for (int i = 0; i < (int)result.Count; i++)
+                        {
+                            var src = result[i];
+                            // Extract strings while native memory is still valid
+                            string uuid = src.m_uuid;
+                            string name = src.m_name;
+                            string contentUrl = src.m_contentUrl;
+                            string thumbnailUrl = src.m_thumbnailUrl;
+
+                            // Copy tags into a new StringVector, pass to AssetInfo, then dispose
+                            // The native AssetInfo constructor copies the vector data
+                            var srcTags = src.m_tags;
+                            using (var copiedTags = new StringVector())
+                            {
+                                if (srcTags != null)
+                                {
+                                    for (int j = 0; j < (int)srcTags.Count; j++)
+                                    {
+                                        copiedTags.Add(srcTags[j]);
+                                    }
+                                }
+
+                                // Create a new AssetInfo that owns its own memory
+                                assets[i] = new AssetInfo(uuid, name, contentUrl, thumbnailUrl, copiedTags);
+                            }
+                        }
+                        return assets;
+                    }
+                }
+            });
         }
 
+        /// <summary>
+        /// Get all unique tags from available assets.
+        /// Runs blocking native call on background thread to avoid blocking Unity main thread.
+        /// </summary>
         public Task<string[]> GetAvailableTags()
         {
-            var tcs = new TaskCompletionSource<string[]>();
-
-            var handle = GCHandle.Alloc(tcs);
-            m_client.GetAvailableTags(GetAvailableTagsCallback, GCHandle.ToIntPtr(handle));
-
-            return tcs.Task;
+            var client = m_client;
+            return Task.Run(() =>
+            {
+                using (var result = client.GetAvailableTags())
+                {
+                    var tags = new string[(int)result.Count];
+                    for (int i = 0; i < (int)result.Count; i++)
+                    {
+                        tags[i] = result[i];
+                    }
+                    return tags;
+                }
+            });
         }
 
+        /// <summary>
+        /// Get all available server environment names.
+        /// Runs blocking native call on background thread to avoid blocking Unity main thread.
+        /// </summary>
         public Task<string[]> GetAvailableEnvironments()
         {
-            var tcs = new TaskCompletionSource<string[]>();
-
-            var handle = GCHandle.Alloc(tcs);
-            m_client.GetAvailableEnvironments(GetAvailableEnvironmentsCallback, GCHandle.ToIntPtr(handle));
-
-            return tcs.Task;
+            var client = m_client;
+            return Task.Run(() =>
+            {
+                using (var result = client.GetAvailableEnvironments())
+                {
+                    var environments = new string[(int)result.Count];
+                    for (int i = 0; i < (int)result.Count; i++)
+                    {
+                        environments[i] = result[i];
+                    }
+                    return environments;
+                }
+            });
         }
 
         public async Task<bool> SetServerEnvironment(string environment)
@@ -108,7 +169,11 @@ namespace Miris.Runtime
 
         public void SetTags(string[] tags)
         {
-            m_tags = tags;
+            m_tags.Clear();
+            foreach (var tag in tags)
+            {
+                m_tags.Add(tag);
+            }
             TagsChanged?.Invoke();
         }
 

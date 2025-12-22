@@ -99,7 +99,7 @@ namespace Miris.Runtime
             InitializeEnvironmentsDropdown();
             InitializeViewerKeyInputField();
             InitializeTagsDropdown();
-            m_clearButton.onClick.AddListener(OnClearButtonClicked);
+            m_clearButton?.onClick.AddListener(OnClearButtonClicked);
             m_streamController.GetAssetManager().ServerEnvironmentChanged += OnEnvironmentChanged;
         }
 
@@ -151,7 +151,7 @@ namespace Miris.Runtime
         {
             // Tear down dropdowns
             m_streamController.GetAssetManager().ServerEnvironmentChanged -= OnEnvironmentChanged;
-            m_clearButton.onClick.RemoveListener(OnClearButtonClicked);
+            m_clearButton?.onClick.RemoveListener(OnClearButtonClicked);
             m_environmentDropdown.onValueChanged.RemoveListener(OnEnvironmentDropdownChanged);
             m_viewerKeyInputField.onValueChanged.RemoveListener(OnViewerKeyInputFieldChanged);
             m_tagsInputField.onValueChanged.RemoveListener(OnTagsInputFieldChanged);

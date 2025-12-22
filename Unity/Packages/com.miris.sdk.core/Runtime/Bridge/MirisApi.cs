@@ -20,52 +20,6 @@ using UnityEditor;
 namespace Miris.Runtime
 {
     using ClientHandle = IntPtr;
-
-    public static class InteropUtils
-    {
-        public static T[] MarshalArrayFromPtr<T>(IntPtr ptr, int count) where T : struct
-        {
-            int size = Marshal.SizeOf<T>();
-            var array = new T[count];
-
-            for (int i = 0; i < count; i++)
-            {
-                array[i] = Marshal.PtrToStructure<T>(IntPtr.Add(ptr, i * size));
-            }
-
-            return array;
-        }
-
-        public static string[] MarshalStringArrayFromPtr(IntPtr ptr, int count)
-        {
-            int size = Marshal.SizeOf<IntPtr>();
-            var array = new string[count];
-
-            for (int i = 0; i < count; i++)
-            {
-                var strPtr = Marshal.ReadIntPtr(IntPtr.Add(ptr, i * size));
-                array[i] = Marshal.PtrToStringAnsi(strPtr);
-            }
-
-            return array;
-        }
-
-        public static void NativeAsyncCallbackArray<T>(IntPtr ptr, int count, IntPtr userData) where T : struct
-        {
-            var handle = GCHandle.FromIntPtr(userData);
-            var tcs = (TaskCompletionSource<T[]>)handle.Target;
-            handle.Free();
-            tcs.SetResult(MarshalArrayFromPtr<T>(ptr, count));
-        }
-
-        public static void NativeAsyncCallbackStringArray(IntPtr ptr, int count, IntPtr userData)
-        {
-            var handle = GCHandle.FromIntPtr(userData);
-            var tcs = (TaskCompletionSource<string[]>)handle.Target;
-            handle.Free();
-            tcs.SetResult(MarshalStringArrayFromPtr(ptr, count));
-        }
-    }
     
     /// <summary>
     /// Details the Miris C# API for Unity.
@@ -142,15 +96,6 @@ namespace Miris.Runtime
         static public extern void SetAssetViewerKey(ClientHandle client, string key);
 
         [DllImport(AquaUnityPath)]
-        static public extern void GetAssets(ClientHandle client, IntPtr tags, int tagsCount, FillNativeArrayCallback callback, IntPtr userData);
-
-        [DllImport(AquaUnityPath)]
-        static public extern void GetAvailableTags(ClientHandle client, FillNativeArrayCallback callback, IntPtr userData);
-
-        [DllImport(AquaUnityPath)]
-        static public extern void GetAvailableEnvironments(ClientHandle client, FillNativeArrayCallback callback, IntPtr userData);
-
-        [DllImport(AquaUnityPath)]
         static public extern IntPtr GetDefaultEnvironment(ClientHandle client);
 
         [DllImport(AquaUnityPath)]
@@ -174,7 +119,7 @@ namespace Miris.Runtime
         static public extern int AddStream(ClientHandle client, string streamName, string contentUrl, int clientType, bool doNotRefine);
 
         [DllImport(AquaUnityPath)]
-        static public extern int AddStreamById(ClientHandle client, string streamName, string assetId, int clientType, bool doNotRefine, AddStreamCallback callback, IntPtr userData);
+        static public extern int AddStreamById(ClientHandle client, string streamName, string assetId, int clientType, bool doNotRefine);
 
         [DllImport(AquaUnityPath)]
         static public extern bool RemoveStream(ClientHandle client, int streamObjectId);
@@ -263,9 +208,6 @@ namespace Miris.Runtime
         static public extern void GetTransform(ClientHandle client, int sceneObjectId, float[] transformData);
 
         [DllImport(AquaUnityPath)]
-        static public extern void GetMetadata(ClientHandle client, int sceneObjectId, ref AssetMetadata metadata);
-
-        [DllImport(AquaUnityPath)]
         static public extern void GetBoundingBox(ClientHandle client, int sceneObjectId, float[] boundingBox);
 
         [DllImport(AquaUnityPath)]
@@ -279,9 +221,6 @@ namespace Miris.Runtime
 
         [DllImport(AquaUnityPath)]
         static public extern int GetSceneOperatorCount(ClientHandle client);
-
-        [DllImport(AquaUnityPath)]
-        static public extern void GetSceneMetadata(ClientHandle client, ref SceneMetadata metadata);
 
         [DllImport(AquaUnityPath)]
         static public extern void MarkAttributeArrayAccessed(uint hash0, uint hash1, uint hash2, uint hash3);

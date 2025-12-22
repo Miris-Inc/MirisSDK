@@ -27,40 +27,11 @@ namespace Miris.Runtime
             return GetSceneObject(streamObjectId);
         }
 
-        class AddStreamCallbackUserdata
+        public SceneObject AddStreamById(string streamName, string uuid, bool doNotRefine=false)
         {
-            public TaskCompletionSource<SceneObject> m_tcs;
-            public Client m_client;
-        }
 
-        [MonoPInvokeCallback(typeof(AddStreamCallback))]
-        private static void NativeAsyncAddStreamCallback(int streamId, System.IntPtr userData)
-        {
-            var handle = GCHandle.FromIntPtr(userData);
-            var castedData = (AddStreamCallbackUserdata)handle.Target;
-            handle.Free();
-
-            if (castedData != null)
-            {
-                castedData.m_tcs.SetResult(new(castedData.m_client, streamId));
-            }
-        }
-
-        public Task<SceneObject> AddStreamById(string streamName, string uuid, bool doNotRefine=false)
-        {
-            var tcs = new TaskCompletionSource<SceneObject>();
-
-            if (string.IsNullOrEmpty(uuid))
-            {
-                tcs.SetResult(null);
-            }
-            else
-            {
-                var handle = GCHandle.Alloc(new AddStreamCallbackUserdata() { m_tcs = tcs, m_client = m_client });
-                m_client.AddStreamById(streamName, uuid, MirisApi.UNITY_CLIENT, doNotRefine, NativeAsyncAddStreamCallback, GCHandle.ToIntPtr(handle));
-            }
-
-            return tcs.Task;
+            int streamObjectId = m_client.AddStreamById(streamName, uuid, MirisApi.UNITY_CLIENT, doNotRefine);
+            return GetSceneObject(streamObjectId);
         }
 
         public bool RemoveStream(SceneObject streamObject)
@@ -122,9 +93,8 @@ namespace Miris.Runtime
             m_client.GetLodMinMaxIndices(ref minLodIndex, ref maxLodIndex);
         }
 
-        public void GetMetadata(out SceneMetadata metadata){
-            metadata = new SceneMetadata();
-            m_client.GetSceneMetadata(ref metadata);
+        public void GetMetadata(SceneMetadata metadata){
+            m_client.GetSceneMetadata(metadata);
         }
     }
 }
