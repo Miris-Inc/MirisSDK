@@ -1,0 +1,19 @@
+{
+  "name": "com.miris.sdk.core",
+  "version": "2026.01.20829148169",
+  "displayName": "Miris SDK Core",
+  "description": "Miris SDK Core for Unity",
+  "unity": "6000.0",
+  "unityRelease": "58f2",
+  "dependencies": {
+    "com.unity.burst": "1.8.8",
+    "com.unity.collections": "2.1.4",
+    "com.unity.mathematics": "1.2.6",
+    "com.unity.test-framework.performance": "3.0.3",
+    "com.unity.testframework.graphics": "8.9.0-exp.1"
+  },
+  "author": {
+    "name": "Miris, Inc",
+    "url": "https://www.miris.com"
+  }
+}
