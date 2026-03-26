@@ -1,0 +1,29 @@
+// Copyright © 2026 Miris, Inc. All rights reserved.
+
+// This is a valid C++ and C# file :)
+
+#if __cplusplus
+#define public 
+#else
+#define USING_CSHARP
+#endif 
+
+#if USING_CSHARP
+namespace Miris.Runtime
+{
+#endif
+
+#if __cplusplus
+public enum class SceneObjectType 
+#else
+public enum SceneObjectType 
+#endif
+{ AssetRootObject, SceneObject, StreamObject, GaussianSplats, LodCollection, PointsObject, Camera, LodOctree, VariantSetCollection, VariantSet, VariantSetOption };
+
+
+#if USING_CSHARP
+} // Miris.Runtime
+#else
+;
+#undef public
+#endif
