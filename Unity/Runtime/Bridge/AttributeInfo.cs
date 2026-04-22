@@ -7,7 +7,7 @@
 #define unsafe
 #else
 #define USING_CSHARP
-#endif 
+#endif
 
 #if USING_CSHARP
 using System;
@@ -52,7 +52,7 @@ namespace Miris.Runtime
         public float w;
     };
 
-    // For transporting an AttributeArray (in C++) over to AttributeBuffer (C#) 
+    // For transporting an AttributeArray (in C++) over to AttributeBuffer (C#)
 #if USING_CSHARP
     [StructLayout(LayoutKind.Sequential)]
 #endif
