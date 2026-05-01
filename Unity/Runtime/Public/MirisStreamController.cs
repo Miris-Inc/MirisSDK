@@ -50,7 +50,8 @@ namespace Miris.Runtime
             m_lodUpdateRotation = 20.0f,
             m_fixedLodIndex = 10,
             m_splatCountBudget = 400000,
-            m_maxInflightBytes = 10 * 1024 * 1024,
+            m_congestionMinInflightBytes = 256 * 1024,
+            m_congestionMaxInflightBytes = 128 * 1024 * 1024,
         };
         // Client instance and API helpers
         private Client m_client;
@@ -64,10 +65,10 @@ namespace Miris.Runtime
         private Dictionary<int, MirisStream> m_streamObjectIdToMirisStream = new();
 
         // Associates a miris stream to its constituent assets - note that a stream can load more than 1 asset
-        private Dictionary<MirisStream, HashSet<int>> m_streamToAssetRootObjectIds = new();
+        private Dictionary<MirisStream, HashSet<int>> m_streamToModelRootObjectIds = new();
 
         // Tracks all the splat data sources that belong to an asset root object
-        private Dictionary<int, List<GaussianSplatDataSource>> m_assetRootObjectIdToDataSources = new();
+        private Dictionary<int, List<GaussianSplatDataSource>> m_modelRootObjectIdToDataSources = new();
 
         // Associates each GaussianSplat scene object ID to its data source. 
         private Dictionary<int, GaussianSplatDataSource> m_splatObjectIdToDataSource = new Dictionary<int, GaussianSplatDataSource>();
@@ -176,7 +177,7 @@ namespace Miris.Runtime
             // Track the stream object.
             int sceneObjectId = streamObject.GetId();
             m_streamToSceneObjectId.Add(stream, sceneObjectId);
-            m_streamToAssetRootObjectIds.Add(stream, new());
+            m_streamToModelRootObjectIds.Add(stream, new());
             m_streamObjectIdToMirisStream.Add(sceneObjectId, stream);
             m_streamObjectIds.Add(sceneObjectId);
 
@@ -202,7 +203,7 @@ namespace Miris.Runtime
             // Track the stream object.
             int sceneObjectId = streamObject.GetId();
             m_streamToSceneObjectId.Add(stream, sceneObjectId);
-            m_streamToAssetRootObjectIds.Add(stream, new());
+            m_streamToModelRootObjectIds.Add(stream, new());
             m_streamObjectIdToMirisStream.Add(sceneObjectId, stream);
             m_streamObjectIds.Add(sceneObjectId);
 
@@ -220,11 +221,11 @@ namespace Miris.Runtime
             {
                 m_streamToSceneObjectId.Remove(stream);
                 m_streamObjectIdToMirisStream.Remove(streamObjectId);
-                foreach (int assetRootId in m_streamToAssetRootObjectIds[stream])
+                foreach (int modelRootId in m_streamToModelRootObjectIds[stream])
                 {
-                    m_assetRootObjectIdToDataSources.Remove(assetRootId);
+                    m_modelRootObjectIdToDataSources.Remove(modelRootId);
                 }
-                m_streamToAssetRootObjectIds.Remove(stream);
+                m_streamToModelRootObjectIds.Remove(stream);
                 m_streamObjectIds.Remove(streamObjectId);
             }
             else
@@ -254,7 +255,8 @@ namespace Miris.Runtime
             m_runtimeSettings.m_highestLodLimit = m_sceneMetadata.m_highestLodLimit;
             m_runtimeSettings.m_lowestLodLimit = m_sceneMetadata.m_lowestLodLimit;
             m_runtimeSettings.m_splatCountBudget = m_sceneMetadata.m_splatCountBudget;
-            m_runtimeSettings.m_maxInflightBytes = m_sceneMetadata.m_maxInflightBytes;
+            m_runtimeSettings.m_congestionMinInflightBytes = m_sceneMetadata.m_congestionMinInflightBytes;
+            m_runtimeSettings.m_congestionMaxInflightBytes = m_sceneMetadata.m_congestionMaxInflightBytes;
         }
 
         public void GetAssetMetadata()
@@ -384,11 +386,11 @@ namespace Miris.Runtime
                 SceneObjectType sceneObjectType = sceneObject.GetSceneObjectType();
 
                 // We handle the asset root object by initializing relevant data for the associated MirisStream
-                if (sceneObjectType == SceneObjectType.AssetRootObject)
+                if (sceneObjectType == SceneObjectType.ModelRoot)
                 {
                     MirisStream stream = m_streamObjectIdToMirisStream.First(kv => m_scene.GetSceneObject(kv.Key).IsAncestorOf(sceneObjectId)).Value;
-                    m_streamToAssetRootObjectIds[stream].Add(sceneObjectId);
-                    m_assetRootObjectIdToDataSources[sceneObjectId] = new();
+                    m_streamToModelRootObjectIds[stream].Add(sceneObjectId);
+                    m_modelRootObjectIdToDataSources[sceneObjectId] = new();
                     stream.CreateRenderComponent(sceneObjectId);
                     UpdateRenderComponentTransform(sceneObjectId);
                 }
@@ -400,9 +402,9 @@ namespace Miris.Runtime
                     data.m_object = sceneObject;
                     m_splatObjectIdToDataSource.Add(sceneObjectId, data);
 
-                    foreach (var (assetRootId, dataSources) in m_assetRootObjectIdToDataSources)
+                    foreach (var (modelRootId, dataSources) in m_modelRootObjectIdToDataSources)
                     {
-                        if (m_scene.GetSceneObject(assetRootId).IsAncestorOf(sceneObjectId))
+                        if (m_scene.GetSceneObject(modelRootId).IsAncestorOf(sceneObjectId))
                         {
                             dataSources.Add(data);
                             break;
@@ -490,16 +492,17 @@ namespace Miris.Runtime
             m_scene.GetLodMinMaxIndices(out int minLodIndex, out int maxLodIndex);
 
             // Update the data sources of each render component.
-            foreach (var pair in m_streamToAssetRootObjectIds)
+            foreach (var pair in m_streamToModelRootObjectIds)
             {
                 MirisStream stream = pair.Key;
-                HashSet<int> assetRootIds = pair.Value;
-                foreach (int assetRootId in assetRootIds)
+                HashSet<int> modelRootIds = pair.Value;
+                foreach (int modelRootId in modelRootIds)
                 {
-                    Debug.Assert(m_assetRootObjectIdToDataSources.ContainsKey(assetRootId));
-                    GaussianSplatRenderComponent renderComponent = stream.GetRenderComponent(assetRootId);
+                    
+                    Debug.Assert(m_modelRootObjectIdToDataSources.ContainsKey(modelRootId));
+                    GaussianSplatRenderComponent renderComponent = stream.GetRenderComponent(modelRootId);
                 
-                    var dataSources = m_assetRootObjectIdToDataSources[assetRootId];
+                    var dataSources = m_modelRootObjectIdToDataSources[modelRootId];
                     if (dataSources.Count <= 0)
                     {
                         continue;
@@ -595,7 +598,6 @@ namespace Miris.Runtime
                 m_lodMaxDistance = 20.0f,
                 m_verticalOffset = 0.0f,
                 m_splatCountBudget = 400000,
-                m_maxInflightBytes = 10 * 1024 * 1024,
             };
 
             // Initialize client config.
