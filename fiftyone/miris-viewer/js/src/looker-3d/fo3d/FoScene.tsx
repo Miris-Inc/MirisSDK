@@ -1,0 +1,308 @@
+import { useControls } from "leva";
+import { Suspense, useEffect, useMemo } from "react";
+import { useRecoilValue, useSetRecoilState } from "recoil";
+import { Fo3dErrorBoundary } from "../ErrorBoundary";
+import { PANEL_ORDER_VISIBILITY } from "../constants";
+import { useUrlModifier } from "../hooks/use-fo3d-fetcher";
+import { fo3dContainsBackground, isFo3dBackgroundOnAtom } from "../state";
+import { AssetErrorBoundary } from "./AssetErrorBoundary";
+import { Fo3dBackground } from "./Background";
+import { useFo3dContext } from "./context";
+import { Fbx } from "./mesh/Fbx";
+import { Gltf } from "./mesh/Gltf";
+import { MirisStream } from "./mesh/MirisStream";
+import { Obj } from "./mesh/Obj";
+import { Ply } from "./mesh/Ply";
+import { Stl } from "./mesh/Stl";
+import { Pcd } from "./point-cloud/Pcd";
+import {
+  BoxGeometryAsset,
+  CylinderGeometryAsset,
+  FbxAsset,
+  type FoScene,
+  type FoSceneNode,
+  GltfAsset,
+  MirisStreamAsset,
+  ObjAsset,
+  PcdAsset,
+  PlaneGeometryAsset,
+  PlyAsset,
+  SphereGeometryAsset,
+  StlAsset,
+} from "./render-types";
+import { Box } from "./shape/Box";
+import { Cylinder } from "./shape/Cylinder";
+import { Plane } from "./shape/Plane";
+import { Sphere } from "./shape/Sphere";
+import { getLabelForSceneNode, getVisibilityMapFromFo3dParsed } from "./utils";
+
+interface FoSceneProps {
+  scene: FoScene;
+}
+
+const getAssetJsx = (node: FoSceneNode, children: React.ReactNode) => {
+  if (!node.asset) {
+    return null;
+  }
+
+  const label = getLabelForSceneNode(node);
+  const key = `${label}-${node.position.x}-${node.position.y}-${node.position.z}`;
+
+  if (node.asset instanceof ObjAsset) {
+    return (
+      <Obj
+        key={key}
+        name={node.name}
+        obj={node.asset as ObjAsset}
+        position={node.position}
+        quaternion={node.quaternion}
+        scale={node.scale}
+      >
+        {children}
+      </Obj>
+    );
+  } else if (node.asset instanceof PcdAsset) {
+    return (
+      <Pcd
+        key={key}
+        name={node.name}
+        pcd={node.asset as PcdAsset}
+        position={node.position}
+        quaternion={node.quaternion}
+        scale={node.scale}
+      >
+        {children}
+      </Pcd>
+    );
+  } else if (node.asset instanceof PlyAsset) {
+    return (
+      <Ply
+        key={key}
+        name={node.name}
+        ply={node.asset as PlyAsset}
+        position={node.position}
+        quaternion={node.quaternion}
+        scale={node.scale}
+      >
+        {children}
+      </Ply>
+    );
+  } else if (node.asset instanceof StlAsset) {
+    return (
+      <Stl
+        key={key}
+        name={node.name}
+        stl={node.asset as StlAsset}
+        position={node.position}
+        quaternion={node.quaternion}
+        scale={node.scale}
+      >
+        {children}
+      </Stl>
+    );
+  } else if (node.asset instanceof GltfAsset) {
+    return (
+      <Gltf
+        key={key}
+        name={node.name}
+        gltf={node.asset as GltfAsset}
+        position={node.position}
+        quaternion={node.quaternion}
+        scale={node.scale}
+      >
+        {children}
+      </Gltf>
+    );
+  } else if (node.asset instanceof FbxAsset) {
+    return (
+      <Fbx
+        key={key}
+        name={node.name}
+        fbx={node.asset as FbxAsset}
+        position={node.position}
+        quaternion={node.quaternion}
+        scale={node.scale}
+      >
+        {children}
+      </Fbx>
+    );
+  } else if (node.asset instanceof BoxGeometryAsset) {
+    return (
+      <Box
+        key={key}
+        name={node.name}
+        box={node.asset as BoxGeometryAsset}
+        position={node.position}
+        quaternion={node.quaternion}
+        scale={node.scale}
+      >
+        {children}
+      </Box>
+    );
+  } else if (node.asset instanceof CylinderGeometryAsset) {
+    return (
+      <Cylinder
+        key={key}
+        name={node.name}
+        cylinder={node.asset as CylinderGeometryAsset}
+        position={node.position}
+        quaternion={node.quaternion}
+        scale={node.scale}
+      >
+        {children}
+      </Cylinder>
+    );
+  } else if (node.asset instanceof SphereGeometryAsset) {
+    return (
+      <Sphere
+        key={key}
+        name={node.name}
+        sphere={node.asset as SphereGeometryAsset}
+        position={node.position}
+        quaternion={node.quaternion}
+        scale={node.scale}
+      >
+        {children}
+      </Sphere>
+    );
+  } else if (node.asset instanceof PlaneGeometryAsset) {
+    return (
+      <Plane
+        key={key}
+        name={node.name}
+        plane={node.asset as PlaneGeometryAsset}
+        position={node.position}
+        quaternion={node.quaternion}
+        scale={node.scale}
+      >
+        {children}
+      </Plane>
+    );
+  } else if (node.asset instanceof MirisStreamAsset) {
+    return (
+      <MirisStream
+        key={key}
+        name={node.name}
+        asset={node.asset as MirisStreamAsset}
+        position={node.position}
+        quaternion={node.quaternion}
+        scale={node.scale}
+      >
+        {children}
+      </MirisStream>
+    );
+  }
+
+  return null;
+};
+
+const R3fNode = ({
+  node,
+  visibilityMap,
+}: {
+  node: FoSceneNode;
+  visibilityMap: ReturnType<typeof getVisibilityMapFromFo3dParsed>;
+}) => {
+  const children = useMemo(() => {
+    if (!node.children || node.children.length === 0) {
+      return null;
+    }
+
+    return node.children.map((child) => {
+      return (
+        <R3fNode key={child.name} node={child} visibilityMap={visibilityMap} />
+      );
+    });
+  }, [node, visibilityMap]);
+
+  const label = useMemo(() => getLabelForSceneNode(node), [node]);
+
+  const isNodeVisible = useMemo(
+    () => Boolean(visibilityMap[label]),
+    [label, visibilityMap]
+  );
+
+  const assetJsx = useMemo(
+    () => (isNodeVisible ? getAssetJsx(node, children) : null),
+    [node, children, isNodeVisible]
+  );
+
+  if (!assetJsx) {
+    return null;
+  }
+
+  return (
+    <AssetErrorBoundary>
+      <Suspense fallback={null}>{assetJsx}</Suspense>
+    </AssetErrorBoundary>
+  );
+};
+
+const SceneR3f = ({
+  scene,
+  visibilityMap,
+}: {
+  scene: FoScene;
+  visibilityMap: ReturnType<typeof getVisibilityMapFromFo3dParsed>;
+}) => {
+  return (
+    <group
+      position={scene.position}
+      quaternion={scene.quaternion}
+      scale={scene.scale}
+    >
+      {scene.children.map((child) => (
+        <R3fNode key={child.name} node={child} visibilityMap={visibilityMap} />
+      ))}
+    </group>
+  );
+};
+
+export const FoSceneComponent = ({ scene }: FoSceneProps) => {
+  const defaultVisibilityMap = useMemo(
+    () => getVisibilityMapFromFo3dParsed(scene),
+    [scene]
+  );
+
+  const { isSceneInitialized, fo3dRoot } = useFo3dContext();
+
+  useUrlModifier(fo3dRoot);
+
+  const visibilityMap = useControls(
+    "Visibility",
+    defaultVisibilityMap ?? {},
+    {
+      order: PANEL_ORDER_VISIBILITY,
+      // note: if there's only one object in the scene, we don't need to show the visibility panel
+      // instead, we can expand the panel of the "main object" by default
+      // this saves an extra click for the user
+      collapsed: Object.keys(defaultVisibilityMap).length < 2,
+    },
+    [defaultVisibilityMap]
+  );
+
+  const isFo3dBackgroundOn = useRecoilValue(isFo3dBackgroundOnAtom);
+
+  const setFo3dContainsBackground = useSetRecoilState(fo3dContainsBackground);
+
+  useEffect(() => {
+    if (isSceneInitialized && scene?.background !== null) {
+      setFo3dContainsBackground(true);
+    } else {
+      setFo3dContainsBackground(false);
+    }
+  }, [scene, isSceneInitialized]);
+
+  return (
+    <>
+      {isFo3dBackgroundOn && fo3dRoot && scene.background && (
+        <Fo3dErrorBoundary ignoreError boundaryName="background">
+          <Suspense fallback={null}>
+            <Fo3dBackground background={scene.background} />
+          </Suspense>
+        </Fo3dErrorBoundary>
+      )}
+      <SceneR3f scene={scene} visibilityMap={visibilityMap} />
+    </>
+  );
+};
