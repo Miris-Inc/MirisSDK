@@ -310,7 +310,7 @@ namespace Miris.Runtime
 
         public void GetTransform(int sceneObjectId, float[] transformData)
         {
-            MirisApi.GetTransform(m_handle, sceneObjectId, transformData);
+            MirisApi.MirisGetLocalTransform(m_handle, sceneObjectId, transformData);
         }
 
         public void GetMetadata(int sceneObjectId, AssetMetadata metadata)
@@ -320,7 +320,7 @@ namespace Miris.Runtime
 
         public void GetBoundingBox(int sceneObjectId, float[] boundingBox)
         {
-            MirisApi.GetBoundingBox(m_handle, sceneObjectId, boundingBox);
+            MirisApi.GetLocalBoundingBox(m_handle, sceneObjectId, boundingBox);
         }
 
         public Miris.Runtime.AquaStatus RecordFrameInfo(ref FrameInfo frameInfo)
