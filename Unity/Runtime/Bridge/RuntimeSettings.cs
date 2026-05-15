@@ -49,8 +49,9 @@ namespace Miris.Runtime
             , m_fixedLodIndex(0)
             , m_splatCountBudget(400000)
             , m_nodeCountBudget(200)
-            , m_maxInflightBytes(10*1024*1024)    // Rate limiting for network requests to prevent flooding
-
+            , m_congestionMinInflightBytes(256 * 1024)
+            , m_congestionMaxInflightBytes(128 * 1024 * 1024)
+            , m_xrModeActive(false)
 
         {
             // TODO: if we ever add more heavy-weight members (like containers), we may want to
@@ -70,9 +71,11 @@ namespace Miris.Runtime
                 m_lodUpdateDistance == other.m_lodUpdateDistance &&
                 m_lodUpdateRotation == other.m_lodUpdateRotation &&
                 m_fixedLodIndex == other.m_fixedLodIndex &&
+                m_congestionMinInflightBytes == other.m_congestionMinInflightBytes &&
+                m_congestionMaxInflightBytes == other.m_congestionMaxInflightBytes &&
                 m_splatCountBudget == other.m_splatCountBudget &&
                 m_nodeCountBudget == other.m_nodeCountBudget &&
-                m_maxInflightBytes == other.m_maxInflightBytes
+                m_xrModeActive == other.m_xrModeActive
             );
         }
 
@@ -155,10 +158,23 @@ namespace Miris.Runtime
         [Range(0.0f, 15.0f)]
 #endif
         public int m_fixedLodIndex;
+
+        // ----------------------------------
+        // Congestion Control Params
+        // ----------------------------------
 #if USING_CSHARP
-        [Range(1024*1024, 1024*1024*100)]
+        [Range(256 * 1024, 1024 * 1024 * 100)]
 #endif
-        public int m_maxInflightBytes;    // Rate limiting for network requests to prevent flooding
+        public int m_congestionMinInflightBytes;
+
+#if USING_CSHARP
+        [Range(1024 * 1024, 1024 * 1024 * 500)]
+#endif
+        public int m_congestionMaxInflightBytes;
+
+        // True when an immersive XR session is active
+        public bool m_xrModeActive;
+
     }
 #if USING_CSHARP
 }
