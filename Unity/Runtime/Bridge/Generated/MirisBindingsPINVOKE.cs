@@ -353,12 +353,6 @@ class MirisBindingsPINVOKE {
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_AssetInfo_m_name_get___")]
   public static extern string AssetInfo_m_name_get(global::System.Runtime.InteropServices.HandleRef jarg1);
 
-  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_AssetInfo_m_contentUrl_set___")]
-  public static extern void AssetInfo_m_contentUrl_set(global::System.Runtime.InteropServices.HandleRef jarg1, string jarg2);
-
-  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_AssetInfo_m_contentUrl_get___")]
-  public static extern string AssetInfo_m_contentUrl_get(global::System.Runtime.InteropServices.HandleRef jarg1);
-
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_AssetInfo_m_thumbnailUrl_set___")]
   public static extern void AssetInfo_m_thumbnailUrl_set(global::System.Runtime.InteropServices.HandleRef jarg1, string jarg2);
 
@@ -378,13 +372,13 @@ class MirisBindingsPINVOKE {
   public static extern void delete_AssetInfo(global::System.Runtime.InteropServices.HandleRef jarg1);
 
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_new_AssetInfo__SWIG_1___")]
-  public static extern global::System.IntPtr new_AssetInfo__SWIG_1(string jarg1, string jarg2, string jarg3, string jarg4, global::System.Runtime.InteropServices.HandleRef jarg5);
+  public static extern global::System.IntPtr new_AssetInfo__SWIG_1(string jarg1, string jarg2, string jarg3, global::System.Runtime.InteropServices.HandleRef jarg4);
 
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_new_AssetInfo__SWIG_2___")]
-  public static extern global::System.IntPtr new_AssetInfo__SWIG_2(string jarg1, string jarg2, string jarg3, string jarg4);
+  public static extern global::System.IntPtr new_AssetInfo__SWIG_2(string jarg1, string jarg2, string jarg3);
 
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_new_AssetInfo__SWIG_3___")]
-  public static extern global::System.IntPtr new_AssetInfo__SWIG_3(string jarg1, string jarg2, string jarg3);
+  public static extern global::System.IntPtr new_AssetInfo__SWIG_3(string jarg1, string jarg2);
 
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_AssetMetadata_m_version_set___")]
   public static extern void AssetMetadata_m_version_set(global::System.Runtime.InteropServices.HandleRef jarg1, string jarg2);
@@ -407,24 +401,6 @@ class MirisBindingsPINVOKE {
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_SceneMetadata_m_version_get___")]
   public static extern string SceneMetadata_m_version_get(global::System.Runtime.InteropServices.HandleRef jarg1);
 
-  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_SceneMetadata_m_highestLodLimit_set___")]
-  public static extern void SceneMetadata_m_highestLodLimit_set(global::System.Runtime.InteropServices.HandleRef jarg1, float jarg2);
-
-  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_SceneMetadata_m_highestLodLimit_get___")]
-  public static extern float SceneMetadata_m_highestLodLimit_get(global::System.Runtime.InteropServices.HandleRef jarg1);
-
-  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_SceneMetadata_m_lowestLodLimit_set___")]
-  public static extern void SceneMetadata_m_lowestLodLimit_set(global::System.Runtime.InteropServices.HandleRef jarg1, float jarg2);
-
-  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_SceneMetadata_m_lowestLodLimit_get___")]
-  public static extern float SceneMetadata_m_lowestLodLimit_get(global::System.Runtime.InteropServices.HandleRef jarg1);
-
-  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_SceneMetadata_m_lodMaxDistance_set___")]
-  public static extern void SceneMetadata_m_lodMaxDistance_set(global::System.Runtime.InteropServices.HandleRef jarg1, float jarg2);
-
-  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_SceneMetadata_m_lodMaxDistance_get___")]
-  public static extern float SceneMetadata_m_lodMaxDistance_get(global::System.Runtime.InteropServices.HandleRef jarg1);
-
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_SceneMetadata_m_verticalOffset_set___")]
   public static extern void SceneMetadata_m_verticalOffset_set(global::System.Runtime.InteropServices.HandleRef jarg1, float jarg2);
 
@@ -443,11 +419,17 @@ class MirisBindingsPINVOKE {
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_SceneMetadata_m_nodeCountBudget_get___")]
   public static extern int SceneMetadata_m_nodeCountBudget_get(global::System.Runtime.InteropServices.HandleRef jarg1);
 
-  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_SceneMetadata_m_maxInflightBytes_set___")]
-  public static extern void SceneMetadata_m_maxInflightBytes_set(global::System.Runtime.InteropServices.HandleRef jarg1, int jarg2);
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_SceneMetadata_m_congestionMinInflightBytes_set___")]
+  public static extern void SceneMetadata_m_congestionMinInflightBytes_set(global::System.Runtime.InteropServices.HandleRef jarg1, int jarg2);
 
-  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_SceneMetadata_m_maxInflightBytes_get___")]
-  public static extern int SceneMetadata_m_maxInflightBytes_get(global::System.Runtime.InteropServices.HandleRef jarg1);
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_SceneMetadata_m_congestionMinInflightBytes_get___")]
+  public static extern int SceneMetadata_m_congestionMinInflightBytes_get(global::System.Runtime.InteropServices.HandleRef jarg1);
+
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_SceneMetadata_m_congestionMaxInflightBytes_set___")]
+  public static extern void SceneMetadata_m_congestionMaxInflightBytes_set(global::System.Runtime.InteropServices.HandleRef jarg1, int jarg2);
+
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_SceneMetadata_m_congestionMaxInflightBytes_get___")]
+  public static extern int SceneMetadata_m_congestionMaxInflightBytes_get(global::System.Runtime.InteropServices.HandleRef jarg1);
 
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_SceneMetadata_m_inputColorSpace_set___")]
   public static extern void SceneMetadata_m_inputColorSpace_set(global::System.Runtime.InteropServices.HandleRef jarg1, string jarg2);
