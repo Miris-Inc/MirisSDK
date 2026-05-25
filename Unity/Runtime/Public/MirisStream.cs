@@ -33,7 +33,7 @@ namespace Miris.Runtime
 
         // A stream can be composed of multiple assets. This map allows you to obtain the render component associated with an asset
         [NonSerialized]
-        private Dictionary<int, GaussianSplatRenderComponent> m_assetRootObjectIdToRenderComponent = new();
+        private Dictionary<int, GaussianSplatRenderComponent> m_modelRootObjectIdToRenderComponent = new();
 
         public List<Action> m_onLoadActions = new List<Action>();
         public List<Action> m_onUnloadedActions = new List<Action>();
@@ -54,7 +54,7 @@ namespace Miris.Runtime
 
             Vector3 minBound = Vector3.positiveInfinity;
             Vector3 maxBound = Vector3.negativeInfinity;
-            foreach (var renderComponent in m_assetRootObjectIdToRenderComponent.Values)
+            foreach (var renderComponent in m_modelRootObjectIdToRenderComponent.Values)
             {
                 minBound = Vector3.Min(minBound, renderComponent.GetObjectBounds().min);
                 maxBound = Vector3.Max(maxBound, renderComponent.GetObjectBounds().max);
@@ -71,7 +71,7 @@ namespace Miris.Runtime
 
             Vector3 minBound = Vector3.positiveInfinity;
             Vector3 maxBound = Vector3.negativeInfinity;
-            foreach (var renderComponent in m_assetRootObjectIdToRenderComponent.Values)
+            foreach (var renderComponent in m_modelRootObjectIdToRenderComponent.Values)
             {
                 minBound = Vector3.Min(minBound, renderComponent.GetWorldBounds().min);
                 maxBound = Vector3.Max(maxBound, renderComponent.GetWorldBounds().max);
@@ -84,7 +84,7 @@ namespace Miris.Runtime
 
         public GaussianSplatRenderComponent[] GetRenderComponents()
         {
-            return m_assetRootObjectIdToRenderComponent.Values.ToArray();
+            return m_modelRootObjectIdToRenderComponent.Values.ToArray();
         }
 
         #endregion
@@ -119,7 +119,7 @@ namespace Miris.Runtime
         {
             RegisterController();
             await CheckContentChanged();
-            foreach (var renderComponent in m_assetRootObjectIdToRenderComponent.Values)
+            foreach (var renderComponent in m_modelRootObjectIdToRenderComponent.Values)
             {
                 renderComponent.Update(transform);
             }
@@ -232,26 +232,26 @@ namespace Miris.Runtime
             m_streamController = null;
         }
 
-        internal GaussianSplatRenderComponent CreateRenderComponent(int assetRootObjectId)
+        internal GaussianSplatRenderComponent CreateRenderComponent(int modelRootObjectId)
         {
             GaussianSplatRenderComponent renderComponent = new();
-            Debug.Assert(!m_assetRootObjectIdToRenderComponent.ContainsKey(assetRootObjectId));
-            m_assetRootObjectIdToRenderComponent.Add(assetRootObjectId, renderComponent);
+            Debug.Assert(!m_modelRootObjectIdToRenderComponent.ContainsKey(modelRootObjectId));
+            m_modelRootObjectIdToRenderComponent.Add(modelRootObjectId, renderComponent);
             return renderComponent;
         }
 
-        internal GaussianSplatRenderComponent GetRenderComponent(int assetRootObjectId)
+        internal GaussianSplatRenderComponent GetRenderComponent(int modelRootObjectId)
         {
-            return m_assetRootObjectIdToRenderComponent[assetRootObjectId];
+            return m_modelRootObjectIdToRenderComponent[modelRootObjectId];
         }
 
         private void ClearRenderResources()
         {
-            foreach (var renderComponent in m_assetRootObjectIdToRenderComponent.Values)
+            foreach (var renderComponent in m_modelRootObjectIdToRenderComponent.Values)
             {
                 renderComponent.Dispose();
             }
-            m_assetRootObjectIdToRenderComponent.Clear();
+            m_modelRootObjectIdToRenderComponent.Clear();
         }
     }
 }
