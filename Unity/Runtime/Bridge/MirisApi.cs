@@ -162,6 +162,9 @@ namespace Miris.Runtime
         static public extern AquaStatus UnlockScene(ClientHandle client);
 
         [DllImport(AquaUnityPath)]
+        static public extern bool TakeRenderRequired(ClientHandle client);
+
+        [DllImport(AquaUnityPath)]
         static public extern AquaStatus GetSceneChangesCounts(ClientHandle client,
             ref SceneChangeIds sceneChangeIds
         );
@@ -227,10 +230,10 @@ namespace Miris.Runtime
         static public extern IntPtr GetRenderEventCallbackPtr();
 
         [DllImport(AquaUnityPath)]
-        static public extern AquaStatus GetTransform(ClientHandle client, int sceneObjectId, float[] transformData);
+        static public extern AquaStatus MirisGetLocalTransform(ClientHandle client, int sceneObjectId, float[] transformData);
 
         [DllImport(AquaUnityPath)]
-        static public extern AquaStatus GetBoundingBox(ClientHandle client, int sceneObjectId, float[] boundingBox);
+        static public extern AquaStatus GetLocalBoundingBox(ClientHandle client, int sceneObjectId, float[] boundingBox);
 
         [DllImport(AquaUnityPath)]
         static public extern AquaStatus RecordFrameInfo(ClientHandle client, ref FrameInfo FrameInfo);
