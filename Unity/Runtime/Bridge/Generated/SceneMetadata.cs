@@ -71,36 +71,6 @@ public class SceneMetadata : global::System.IDisposable {
     } 
   }
 
-  public float m_highestLodLimit {
-    set {
-      MirisBindingsPINVOKE.SceneMetadata_m_highestLodLimit_set(swigCPtr, value);
-    } 
-    get {
-      float ret = MirisBindingsPINVOKE.SceneMetadata_m_highestLodLimit_get(swigCPtr);
-      return ret;
-    } 
-  }
-
-  public float m_lowestLodLimit {
-    set {
-      MirisBindingsPINVOKE.SceneMetadata_m_lowestLodLimit_set(swigCPtr, value);
-    } 
-    get {
-      float ret = MirisBindingsPINVOKE.SceneMetadata_m_lowestLodLimit_get(swigCPtr);
-      return ret;
-    } 
-  }
-
-  public float m_lodMaxDistance {
-    set {
-      MirisBindingsPINVOKE.SceneMetadata_m_lodMaxDistance_set(swigCPtr, value);
-    } 
-    get {
-      float ret = MirisBindingsPINVOKE.SceneMetadata_m_lodMaxDistance_get(swigCPtr);
-      return ret;
-    } 
-  }
-
   public float m_verticalOffset {
     set {
       MirisBindingsPINVOKE.SceneMetadata_m_verticalOffset_set(swigCPtr, value);
@@ -131,12 +101,22 @@ public class SceneMetadata : global::System.IDisposable {
     } 
   }
 
-  public int m_maxInflightBytes {
+  public int m_congestionMinInflightBytes {
     set {
-      MirisBindingsPINVOKE.SceneMetadata_m_maxInflightBytes_set(swigCPtr, value);
+      MirisBindingsPINVOKE.SceneMetadata_m_congestionMinInflightBytes_set(swigCPtr, value);
     } 
     get {
-      int ret = MirisBindingsPINVOKE.SceneMetadata_m_maxInflightBytes_get(swigCPtr);
+      int ret = MirisBindingsPINVOKE.SceneMetadata_m_congestionMinInflightBytes_get(swigCPtr);
+      return ret;
+    } 
+  }
+
+  public int m_congestionMaxInflightBytes {
+    set {
+      MirisBindingsPINVOKE.SceneMetadata_m_congestionMaxInflightBytes_set(swigCPtr, value);
+    } 
+    get {
+      int ret = MirisBindingsPINVOKE.SceneMetadata_m_congestionMaxInflightBytes_get(swigCPtr);
       return ret;
     } 
   }
