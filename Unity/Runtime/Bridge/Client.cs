@@ -112,16 +112,9 @@ namespace Miris.Runtime
             }
         }
 
-        public void RecordFrameInfo(int splatCount)
+        public void RecordFrameTime(double frameTimeMs)
         {
-            FrameInfo frameInfo = new FrameInfo
-            {
-                m_deltaTimeSeconds = Time.deltaTime,
-                m_frameCount = Time.frameCount,
-                m_splatCount = splatCount
-            };
-
-            MirisApi.RecordFrameInfo(m_handle, ref frameInfo);
+            MirisApi.RecordFrameTime(m_handle, frameTimeMs);
         }
 
         public void SetRuntimeSettings(RuntimeSettings runtimeSettings)
@@ -221,6 +214,16 @@ namespace Miris.Runtime
             MirisApi.UnlockScene(m_handle);
         }
 
+        /// <summary>
+        /// Check if a render is required (scene content changed, camera/object transforms updated).
+        /// The flag is automatically cleared after this call (read-and-clear semantics).
+        /// </summary>
+        /// <returns>True if rendering is needed, false otherwise.</returns>
+        public bool TakeRenderRequired()
+        {
+            return MirisApi.TakeRenderRequired(m_handle);
+        }
+
         public Miris.Runtime.AquaStatus GetSceneChangesCounts(ref SceneChangeIds sceneChangeIds)
         {
             return MirisApi.GetSceneChangesCounts(m_handle, ref sceneChangeIds);
@@ -310,7 +313,7 @@ namespace Miris.Runtime
 
         public void GetTransform(int sceneObjectId, float[] transformData)
         {
-            MirisApi.GetTransform(m_handle, sceneObjectId, transformData);
+            MirisApi.MirisGetLocalTransform(m_handle, sceneObjectId, transformData);
         }
 
         public void GetMetadata(int sceneObjectId, AssetMetadata metadata)
@@ -320,12 +323,7 @@ namespace Miris.Runtime
 
         public void GetBoundingBox(int sceneObjectId, float[] boundingBox)
         {
-            MirisApi.GetBoundingBox(m_handle, sceneObjectId, boundingBox);
-        }
-
-        public Miris.Runtime.AquaStatus RecordFrameInfo(ref FrameInfo frameInfo)
-        {
-            return MirisApi.RecordFrameInfo(m_handle, ref frameInfo);
+            MirisApi.GetLocalBoundingBox(m_handle, sceneObjectId, boundingBox);
         }
 
         public int GetLodIndex(int sceneObjectId)
