@@ -23,17 +23,6 @@ public class MirisBindings {
     return ret;
   }
 
-  public static AssetInfoVector GetAssets(global::System.IntPtr client, StringVector tags) {
-    AssetInfoVector ret = new AssetInfoVector(MirisBindingsPINVOKE.GetAssets(client, StringVector.getCPtr(tags)), true);
-    if (MirisBindingsPINVOKE.SWIGPendingException.Pending) throw MirisBindingsPINVOKE.SWIGPendingException.Retrieve();
-    return ret;
-  }
-
-  public static StringVector GetAvailableTags(global::System.IntPtr client) {
-    StringVector ret = new StringVector(MirisBindingsPINVOKE.GetAvailableTags(client), true);
-    return ret;
-  }
-
 }
 
 }
