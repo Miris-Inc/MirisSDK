@@ -53,21 +53,7 @@ MonoBehaviour:
   m_executionMode: 0
   m_sceneMetadata:
     m_version: 
-    m_highestLodLimit: 1.0
-    m_lowestLodLimit: 0
-    m_lodMaxDistance: 20
     m_verticalOffset: 0
     m_spawnBehavior: 0
-  m_lodRefinementParameters:
-    m_lodSelectionMode: 0
-    m_lodRequestPriority: 1
-    m_graphicsLodCalibratorType: 0
-    m_graphicsLodCalibratorInfluence: 0.5
-    m_targetFramesPerSecond: 72
-    m_lowestLodLimit: 0
-    m_highestLodLimit: 1.0
-    m_lodMaxDistance: 20
-    m_lodUpdateDistance: 5
-    m_lodUpdateRotation: 20
-    m_fixedLodIndex: 10
+  
   m_fadeDurationSeconds: 0.3
