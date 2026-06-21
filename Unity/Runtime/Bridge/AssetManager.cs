@@ -61,7 +61,6 @@ namespace Miris.Runtime
                             // Extract strings while native memory is still valid
                             string uuid = src.m_uuid;
                             string name = src.m_name;
-                            string contentUrl = src.m_contentUrl;
                             string thumbnailUrl = src.m_thumbnailUrl;
 
                             // Copy tags into a new StringVector, pass to AssetInfo, then dispose
@@ -78,7 +77,7 @@ namespace Miris.Runtime
                                 }
 
                                 // Create a new AssetInfo that owns its own memory
-                                assets[i] = new AssetInfo(uuid, name, contentUrl, thumbnailUrl, copiedTags);
+                                assets[i] = new AssetInfo(uuid, name, thumbnailUrl, copiedTags);
                             }
                         }
                         return assets;
