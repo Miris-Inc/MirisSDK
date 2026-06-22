@@ -848,6 +848,9 @@ namespace Miris.Editor
             using (var archive = new ZipArchive(fs, ZipArchiveMode.Read))
             {
                 string destFull = Path.GetFullPath(destDir);
+                // Normalize to end with exactly one directory separator so the prefix
+                // check works even when destFull is a filesystem root (e.g. "C:\" or "/").
+                string destPrefix = destFull.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
                 foreach (var entry in archive.Entries)
                 {
                     if (string.IsNullOrEmpty(entry.FullName)) continue;
@@ -857,6 +860,9 @@ namespace Miris.Editor
 
                     string outPath = Path.Combine(destDir, entry.FullName);
                     string outFull = Path.GetFullPath(outPath);
+
+                    if (!outFull.StartsWith(destPrefix, StringComparison.Ordinal))
+                        throw new InvalidOperationException($"Zip Slip detected: entry '{entry.FullName}' escapes destination directory.");
 
                     if (string.IsNullOrEmpty(entry.Name))
                     {
