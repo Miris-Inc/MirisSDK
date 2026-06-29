@@ -211,7 +211,7 @@ namespace Miris.Runtime
                     }
                 case AttributeSemantic.SparkPackedSplats:
                     {
-                        return "sparkPackedSplats";
+                        return "sparkPackedSplat";
                     }
                 default:
                     {
