@@ -43,38 +43,8 @@ namespace Miris.Runtime
 
         // C to C# Mapping:
         // void* == IntPtr
-        // const char* == string 
+        // const char* == string
         // char* == StringBuilder
-        
-        /// <summary>
-        /// Sets the logging level for Aqua. Options are Trace, Debug, Info, 
-        /// Warn, Error, Critical.
-        /// </summary>
-        /// <param name="logLevel">The desired logging level</param>
-        [DllImport(AquaUnityPath)]
-        static public extern AquaStatus SetLogLevel(LogLevel logLevel);
-
-        /// <summary>
-        /// Gets the current logging level for Aqua.
-        /// </summary>
-        /// <returns>The current logging level</returns>
-        [DllImport(AquaUnityPath)]
-        static public extern LogLevel GetLogLevel();
-
-        /// <summary>
-        /// Gets the platform Aqua is expecting to be running on. Use is
-        /// discouraged, most users should continue using <see cref="Application.platform"/>
-        /// </summary>
-        /// <returns>The Aqua runtime platform</returns>
-        [DllImport(AquaUnityPath)]
-        static public extern int GetPlatform();
-
-        /// <summary>
-        /// Indicates whether Aqua is a debug binary.
-        /// </summary>
-        /// <returns>1 if a debug binary, 0 otherwise</returns>
-        [DllImport(AquaUnityPath)]
-        static public extern int LibAquaIsDebug();
 
         /// <summary>
         /// Gets the raw version of the Aqua native library.
@@ -150,6 +120,9 @@ namespace Miris.Runtime
         static public extern AquaStatus UpdateSceneExecution(ClientHandle client);
 
         [DllImport(AquaUnityPath)]
+        static public extern AquaStatus RecordFrameTime(ClientHandle client, double frameTimeMs);
+
+        [DllImport(AquaUnityPath)]
         static public extern AquaStatus WaitForSceneExecution(ClientHandle client);
 
         [DllImport(AquaUnityPath)]
@@ -160,6 +133,9 @@ namespace Miris.Runtime
 
         [DllImport(AquaUnityPath)]
         static public extern AquaStatus UnlockScene(ClientHandle client);
+
+        [DllImport(AquaUnityPath)]
+        static public extern bool TakeRenderRequired(ClientHandle client);
 
         [DllImport(AquaUnityPath)]
         static public extern AquaStatus GetSceneChangesCounts(ClientHandle client,
@@ -227,13 +203,10 @@ namespace Miris.Runtime
         static public extern IntPtr GetRenderEventCallbackPtr();
 
         [DllImport(AquaUnityPath)]
-        static public extern AquaStatus GetTransform(ClientHandle client, int sceneObjectId, float[] transformData);
+        static public extern AquaStatus MirisGetLocalTransform(ClientHandle client, int sceneObjectId, float[] transformData);
 
         [DllImport(AquaUnityPath)]
-        static public extern AquaStatus GetBoundingBox(ClientHandle client, int sceneObjectId, float[] boundingBox);
-
-        [DllImport(AquaUnityPath)]
-        static public extern AquaStatus RecordFrameInfo(ClientHandle client, ref FrameInfo FrameInfo);
+        static public extern AquaStatus GetLocalBoundingBox(ClientHandle client, int sceneObjectId, float[] boundingBox);
 
         [DllImport(AquaUnityPath)]
         static public extern int GetLodIndex(ClientHandle client, int sceneObjectId);
