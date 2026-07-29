@@ -18,7 +18,7 @@ public enum class SceneObjectType
 #else
 public enum SceneObjectType 
 #endif
-{ AssetRootObject, SceneObject, StreamObject, GaussianSplats, LodCollection, PointsObject, Camera, LodOctree };
+{ ModelRoot, SceneObject, StreamObject, GaussianSplats, PointsObject, Camera, LodOctree, VariantSetCollection, VariantSet, VariantSetOption };
 
 
 #if USING_CSHARP
