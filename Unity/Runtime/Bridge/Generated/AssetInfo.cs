@@ -83,18 +83,6 @@ public class AssetInfo : global::System.IDisposable {
     } 
   }
 
-  public string m_contentUrl {
-    set {
-      MirisBindingsPINVOKE.AssetInfo_m_contentUrl_set(swigCPtr, value);
-      if (MirisBindingsPINVOKE.SWIGPendingException.Pending) throw MirisBindingsPINVOKE.SWIGPendingException.Retrieve();
-    } 
-    get {
-      string ret = MirisBindingsPINVOKE.AssetInfo_m_contentUrl_get(swigCPtr);
-      if (MirisBindingsPINVOKE.SWIGPendingException.Pending) throw MirisBindingsPINVOKE.SWIGPendingException.Retrieve();
-      return ret;
-    } 
-  }
-
   public string m_thumbnailUrl {
     set {
       MirisBindingsPINVOKE.AssetInfo_m_thumbnailUrl_set(swigCPtr, value);
@@ -121,15 +109,15 @@ public class AssetInfo : global::System.IDisposable {
   public AssetInfo() : this(MirisBindingsPINVOKE.new_AssetInfo__SWIG_0(), true) {
   }
 
-  public AssetInfo(string uuid, string name, string contentUrl, string thumbnailUrl, StringVector tags) : this(MirisBindingsPINVOKE.new_AssetInfo__SWIG_1(uuid, name, contentUrl, thumbnailUrl, StringVector.getCPtr(tags)), true) {
+  public AssetInfo(string uuid, string name, string thumbnailUrl, StringVector tags) : this(MirisBindingsPINVOKE.new_AssetInfo__SWIG_1(uuid, name, thumbnailUrl, StringVector.getCPtr(tags)), true) {
     if (MirisBindingsPINVOKE.SWIGPendingException.Pending) throw MirisBindingsPINVOKE.SWIGPendingException.Retrieve();
   }
 
-  public AssetInfo(string uuid, string name, string contentUrl, string thumbnailUrl) : this(MirisBindingsPINVOKE.new_AssetInfo__SWIG_2(uuid, name, contentUrl, thumbnailUrl), true) {
+  public AssetInfo(string uuid, string name, string thumbnailUrl) : this(MirisBindingsPINVOKE.new_AssetInfo__SWIG_2(uuid, name, thumbnailUrl), true) {
     if (MirisBindingsPINVOKE.SWIGPendingException.Pending) throw MirisBindingsPINVOKE.SWIGPendingException.Retrieve();
   }
 
-  public AssetInfo(string uuid, string name, string contentUrl) : this(MirisBindingsPINVOKE.new_AssetInfo__SWIG_3(uuid, name, contentUrl), true) {
+  public AssetInfo(string uuid, string name) : this(MirisBindingsPINVOKE.new_AssetInfo__SWIG_3(uuid, name), true) {
     if (MirisBindingsPINVOKE.SWIGPendingException.Pending) throw MirisBindingsPINVOKE.SWIGPendingException.Retrieve();
   }
 
