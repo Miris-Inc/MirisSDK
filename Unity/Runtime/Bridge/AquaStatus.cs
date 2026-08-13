@@ -3,10 +3,10 @@
 // This is a valid C++ and C# file :)
 
 #if __cplusplus
-#define public 
+#define public
 #else
 #define USING_CSHARP
-#endif 
+#endif
 
 #if USING_CSHARP
 namespace Miris.Runtime
@@ -27,5 +27,5 @@ public enum AquaStatus
 } // Miris.Runtime
 #else
 ;
-#undef public 
+#undef public
 #endif
