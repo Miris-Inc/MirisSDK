@@ -1,0 +1,404 @@
+// Copyright (c) 2024 Miris. All rights reserved.
+
+#pragma kernel ClearRenderBuffers
+#pragma kernel RenderPoints
+#pragma kernel RenderPointsDepth
+
+#include_with_pragmas "GaussianSplatDecoder.hlsl"
+#include "GaussianSplatting.hlsl"
+
+#define THREADS_PER_GROUP 512
+
+RWTexture2D<float4> _RenderResult;
+RWStructuredBuffer<uint> _DepthBuffer; // replaces texture2d buffer to allow atomic opterations on metal
+
+float4x4 _MatrixModelViewProjection; 
+float4x4 _MatrixModelView; 
+float4x4 _MatrixModelViewInverse; 
+
+float4x4 _MatrixObjectToWorld;
+float4x4 _MatrixWorldToObject;
+float4 _CameraPosition;
+
+float4 _VecProjectionParams;
+float4 _VecScreenParams;
+
+uniform uint _NumSplats;
+uniform uint _StereoRender;
+uniform uint _EyeIndex; // 0|1 == left|right
+uniform uint _ImageWidth;
+uniform uint _ImageHeight;
+uniform uint _ColorMode;
+uniform uint _FlatnessPercent;
+uniform uint _DepthAttenuate;
+uniform float _AlphaCullThreshold;
+uniform int _SHCount;
+uniform int _SHOrder;
+uniform uint _SHAxis;
+uniform uint _SHChannel;
+
+#define ColorModeWhite 0
+#define ColorModeSplatColor 1
+#define ColorModeSplatAxis 2
+#define ColorModeSplatFlatness 3
+#define ColorModeSplatFlatNormal 4
+#define ColorModeSplatFlatFacing 5
+#define ColorModeDataSource 6
+#define ColorModeSphericalHarmonics 7
+#define ColorModeSphericalHarmonicsLighting 8
+
+#define SHAxisX 0
+#define SHAxisY 1
+#define SHAxisZ 2
+#define SHChannelR 0
+#define SHChannelG 1
+#define SHChannelB 2
+#define SHChannelCombinedPositive 3
+#define SHChannelCombinedNegative 4
+
+// something to generate a basic random float given an input uint (seed)
+// lifted from   https://www.shadertoy.com/view/tsf3Dn
+int xorshift(in int value) 
+{
+    // Xorshift*32
+    // Based on George Marsaglia's work: http://www.jstatsoft.org/v08/i14/paper
+    value ^= value << 13;
+    value ^= value >> 17;
+    value ^= value << 5;
+    return value;
+}
+float randFloat(in int seed)
+{
+    const uint k = 1103515245U;
+
+    int shifted = xorshift(seed * k);
+    return abs(frac(float(shifted) / 3141.592653));
+}
+
+// convert ndc coordinate into pixel space
+// TODO check we are calculating pixel centres
+inline float ndc2Pix(float v, int S)
+{
+    return ((v + 1.0) * S - 1.0) * 0.5;
+}
+
+// use to output splat colours directly into buffer
+// ignoring actual projected positions. could be useful
+// to assess the data as a whole or to plot/see trends
+// in the arrangement of the splats in the data.
+//
+//   uint2 currentPixel = id2Pix(splatDataIndex);
+uint2 id2Pix(uint id)
+{
+    uint y = id/_ImageWidth;
+    uint x = id - (y * _ImageWidth);
+    return uint2(x, y);
+}
+
+// convert pixel position to linear index
+// assumes the pixel describes a valid point within the 
+// dimensions _ImageWidth,_ImageHeight
+uint pix2Index(uint2 pixel)
+{
+    return (pixel.y * _ImageWidth) + pixel.x;
+}
+
+// given a splat world position and a modelviewprojection matrix return
+// a pixel position for the splat given the current image dimensions
+// invalid or culled splat positions will return a value just outside
+// of the render dimensions: (_ImageWidth, _ImageHeight)
+uint3 getSplatPixel(float3 splatPosition, float4x4 modelViewProjection)
+{
+    uint3 splatPixel = uint3(_ImageWidth, _ImageHeight, 0);
+
+    static float width = float(_ImageWidth);
+    static float height = float(_ImageHeight);
+
+    // check for need to invert screenspace positions
+    static float reflectY = _VecProjectionParams.x;
+
+    // Transform splat center from object space to clip space.
+    float4 splatInClipSpace = mul(modelViewProjection, float4(splatPosition, 1));
+    // exit if splat is behind the camera
+    if (splatInClipSpace.w < 0.0)
+    {
+        return splatPixel;
+    }
+
+    // Calculate position in screen/image space
+    float2 splatInScreenSpace = { ndc2Pix(splatInClipSpace.x / splatInClipSpace.w, _VecScreenParams.x), 
+            ndc2Pix(splatInClipSpace.y * reflectY / splatInClipSpace.w, _VecScreenParams.y) };
+
+    float2 splatScreenPos = splatInScreenSpace;
+    if (splatScreenPos.x < 0.f || splatScreenPos.x >= width ||
+        splatScreenPos.y < 0.f || splatScreenPos.y >= height)
+    {
+        return splatPixel;
+    }
+
+    uint2 currentPixel = { uint(floor(splatScreenPos.x)), uint(floor(splatScreenPos.y)) };
+    if (currentPixel.x >= _ImageWidth || currentPixel.y >= _ImageHeight)
+    {
+        return splatPixel;
+    }
+
+    splatPixel.xy = currentPixel.xy;
+    splatPixel.z = asuint(float(splatInClipSpace.z / splatInClipSpace.w));
+
+    return splatPixel;
+}
+
+
+[numthreads(8, 8, 1)]
+void ClearRenderBuffers(uint3 id : SV_DispatchThreadID)
+{
+    uint2 currentPixel = id.xy;
+    if (currentPixel.x >= _ImageWidth || currentPixel.y >= _ImageHeight)
+    {
+        return;
+    }
+    _RenderResult[currentPixel] = float4(0, 0, 0, 0);
+    _DepthBuffer[pix2Index(currentPixel.xy)] = 0; 
+}
+
+
+[numthreads(THREADS_PER_GROUP, 1, 1)]
+void RenderPoints(uint3 id : SV_DispatchThreadID)
+{
+    uint splatDataIndex = id.x;
+    if (splatDataIndex >= _NumSplats)
+    {
+        return;
+    }
+
+    // Load data 
+    float3 splatPosition = GetSplatPosition(splatDataIndex);
+
+    // Convert splat position into screen pixel position
+    uint3 currentPixel = getSplatPixel(splatPosition, _MatrixModelViewProjection);
+    if (currentPixel.x >= _ImageWidth || currentPixel.y >= _ImageHeight)
+    {
+        return;
+    }
+
+    // Get splat color so we can check the alpha
+    float4 splatColor = GetSplatColor(splatDataIndex);
+    if (splatColor.a < _AlphaCullThreshold)
+    {
+        return;
+    }
+
+    // Load data needed for multiple draw modes
+    float3 splatScale = GetSplatScale(splatDataIndex);
+    
+    // Default output color is white
+    float4 resultColor = float4(1, 1, 1, 1);
+    float depthAttenuation = 1.0;
+    if (_DepthAttenuate == 1)
+    {
+        depthAttenuation = asfloat(currentPixel.z) * _VecProjectionParams[2]; 
+    }
+
+    if (_ColorMode == ColorModeSplatColor)
+    {
+        resultColor.rgb = splatColor.rgb;
+        resultColor.a = 1.0;
+    }
+    else if (_ColorMode == ColorModeSplatAxis)
+    {
+        // locate max axis within scale attribute
+        float maxAxis = max(abs(splatScale.x), max(abs(splatScale.y), abs(splatScale.z)));
+        float3 axisColor = float3( abs(splatScale.x)/maxAxis, abs(splatScale.y)/maxAxis, abs(splatScale.z)/maxAxis );
+        resultColor.rgb = axisColor;
+        resultColor.a = 1.0;
+    }
+    else if (_ColorMode == ColorModeSplatFlatness)
+    {
+        // determine if any splat scale axis are near zero 
+        // relative to the maximum splat axis scale
+        float maxAxis = max(abs(splatScale.x), max(abs(splatScale.y), abs(splatScale.z)));
+        //float3 scaledScale = float3( abs(splatScale.x)/maxAxis, abs(splatScale.y)/maxAxis, abs(splatScale.z)/maxAxis );
+        float3 scaledScale = splatScale/maxAxis;
+        // flatness measured as % relative to major axis
+        float flatnessThreshold = saturate(float(_FlatnessPercent)*0.01);
+        float3 flatnessColor = float3(0, 0, 0);
+        flatnessColor.r = abs(scaledScale.x) <= flatnessThreshold ? 1.0 : 0.0;
+        flatnessColor.g = abs(scaledScale.y) <= flatnessThreshold ? 1.0 : 0.0;
+        flatnessColor.b = abs(scaledScale.z) <= flatnessThreshold ? 1.0 : 0.0;
+        resultColor.rgb = flatnessColor;
+        resultColor.a = 1.0;
+    }
+    else if (_ColorMode == ColorModeSplatFlatNormal || 
+             _ColorMode == ColorModeSplatFlatFacing) 
+    {
+        // load splat orientation data
+        float4 splatOrientation = GetSplatOrientation(splatDataIndex);
+
+        // determine if any splat scale axis are near zero 
+        // relative to the maximum splat axis scale
+        float maxAxis = max(abs(splatScale.x), max(abs(splatScale.y), abs(splatScale.z)));
+        float3 scaledScale = splatScale/maxAxis;
+        // flatness measured as % relative to major axis
+        float flatnessThreshold = saturate(float(_FlatnessPercent)*0.01);
+        // choose a facing vector based on the "flat" direction.
+        float3 facingVector = float3(0, 0, 0);
+        if (abs(scaledScale.x) <= flatnessThreshold &&
+            abs(scaledScale.y) > flatnessThreshold && 
+            abs(scaledScale.z) > flatnessThreshold )
+        {
+            facingVector = float3(1, 0, 0);
+        }
+        else if (abs(scaledScale.x) > flatnessThreshold &&
+            abs(scaledScale.y) <= flatnessThreshold && 
+            abs(scaledScale.z) > flatnessThreshold )
+        {
+            facingVector = float3(0, 1, 0);
+        }
+        else if (abs(scaledScale.x) > flatnessThreshold &&
+            abs(scaledScale.y) > flatnessThreshold && 
+            abs(scaledScale.z) <= flatnessThreshold )
+        {
+            facingVector = float3(0, 0, 1);
+        }
+        
+        // rotate by the splat orientation
+        float3x3 splatRotation = quat2matrix(splatOrientation);
+        facingVector = mul(facingVector, splatRotation);
+
+        if (_ColorMode == ColorModeSplatFlatNormal)
+        {
+            resultColor.rgb = normalize(facingVector.xyz);
+            resultColor.rgb = (resultColor.rgb*0.5) + 0.5;
+        }
+        if (_ColorMode == ColorModeSplatFlatFacing)
+        {
+            // get facing vector in modelview 
+            float4 viewFacingVector = mul(float4(facingVector, 1), _MatrixModelViewInverse);
+            resultColor.r = dot( normalize(viewFacingVector.xyz), float3(0,0,-1));
+            resultColor.g = dot( normalize(viewFacingVector.xyz), float3(0,0,1));
+            resultColor.b = 0.0;
+        }
+        
+        resultColor.a = 1.0;
+    }
+    else if (_ColorMode == ColorModeDataSource)
+    {
+        // load splat dataSourceIndex data
+        uint dataSourceIndex = _SplatToDataSourceIndex[splatDataIndex];
+
+        resultColor.rgb = HueToRgb(randFloat(dataSourceIndex));
+        resultColor.a = 1.0;
+    }
+    else if (_ColorMode == ColorModeSphericalHarmonics && _SHCount > 0)
+    {
+        // load splat SH data
+        SplatSHData shCoefficients = GetSplatSHData(splatDataIndex, _SHCount);
+
+        // it appears as though the 0th order data is not
+        // stored here and instead is incorporated in the 
+        // base splat color
+        float3 shColor = float3(0, 0, 0);
+        float3 shColorValue = shCoefficients.sh[_SHAxis];
+
+        // extract individual channels
+        if (_SHChannel == SHChannelR || 
+            _SHChannel == SHChannelG || 
+            _SHChannel == SHChannelB)
+        {
+            // extract one channel from the shColor found for this axis
+            float shValue = 0.0;
+            if (_SHChannel == SHChannelR) shValue = shColorValue.r;
+            else if (_SHChannel == SHChannelG) shValue = shColorValue.g;
+            else if (_SHChannel == SHChannelB) shValue = shColorValue.b;
+
+            // recolor to better describe the values in the coefficients
+            //   red = POSITIVE
+            //   green = NEGATIVE
+            shColor = float3(1, 0, 0);
+            if (shValue < 0.0) shColor = float3(0, 1, 0);
+
+            // scale color by coefficient
+            shColor *= abs(shValue);
+
+            // boost output by ~PI to make it more readable
+            shColor.rg *= 3.14;
+
+            // when displaying base axis positive/negative values add
+            // in a small amount of blue so we avoid totally black pixels
+            shColor.b = 0.2;
+        }
+        else if (_SHChannel == SHChannelCombinedPositive)
+        {
+            shColor = saturate(shColorValue);
+            // boost output by ~PI to make it more readable
+            shColor *= 3.14;
+        }
+        else if (_SHChannel == SHChannelCombinedNegative)
+        {
+            shColor = saturate(shColorValue * -1.0);
+            // boost output by ~PI to make it more readable
+            shColor *= 3.14;
+        }
+
+        // set output color
+        resultColor.rgb = shColor;
+        resultColor.a = 1.0;
+    }
+    else if (ColorModeSphericalHarmonicsLighting && _SHCount > 0)
+    {
+        // load splat SH data
+        SplatSHData shCoefficients = GetSplatSHData(splatDataIndex, _SHCount);
+
+        float3 splatInWorldSpace = mul(_MatrixObjectToWorld, float4(splatPosition, 1)).xyz;
+
+        // Compute SH lighting
+        float3 worldViewDir = _CameraPosition.xyz - splatInWorldSpace;
+        float3 objViewDir = mul((float3x3)_MatrixWorldToObject, worldViewDir);
+        objViewDir = normalize(objViewDir);
+    
+        float3 shColor = ComputeSH(shCoefficients, float3(0,0,0), objViewDir, _SHOrder, true, _SHCount);
+
+        resultColor.rgb = shColor;
+    }
+
+    // attenuate based on depth 
+    resultColor.a *= depthAttenuation;
+   
+    // Store color if we pass the depth test
+    if (_DepthBuffer[pix2Index(currentPixel.xy)] == currentPixel.z)
+    {
+        _RenderResult[currentPixel.xy] = resultColor;
+    }
+}
+ 
+
+[numthreads(THREADS_PER_GROUP, 1, 1)]
+void RenderPointsDepth(uint3 id : SV_DispatchThreadID)
+{
+    uint splatDataIndex = id.x;
+    if (splatDataIndex >= _NumSplats)
+    {
+        return;
+    }
+
+    // Load data 
+    float3 splatPosition = GetSplatPosition(splatDataIndex);
+    // Convert splat position into screen pixel position
+    uint3 currentPixel = getSplatPixel(splatPosition, _MatrixModelViewProjection);
+    if (currentPixel.x >= _ImageWidth || currentPixel.y >= _ImageHeight)
+    {
+        return;
+    }
+
+    float4 splatColor = GetSplatColor(splatDataIndex);
+    if (splatColor.a < _AlphaCullThreshold)
+    {
+        return;
+    }
+    
+    // record depth value if the splat position is on-screen
+    InterlockedMax(_DepthBuffer[pix2Index(currentPixel.xy)], currentPixel.z);
+}
+
+
+
