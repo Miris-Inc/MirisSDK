@@ -27,8 +27,10 @@ namespace Miris.Runtime
         /// Get all available assets from the server environment.
         /// Runs blocking native call on background thread to avoid blocking Unity main thread.
         /// </summary>
-        public Task<AssetInfo[]> GetAssets()
+        public Task<AssetInfo[]> GetAssets(int limit = 0)
         {
+            limit = Math.Max(0, limit);
+
             // Capture tag strings (not SWIG objects) for use in background thread
             var tagStrings = new string[(int)m_tags.Count];
             for (int i = 0; i < (int)m_tags.Count; i++)
@@ -49,7 +51,7 @@ namespace Miris.Runtime
                         tags.Add(tag);
                     }
 
-                    using (var result = client.GetAssets(tags))
+                    using (var result = client.GetAssets(tags, limit))
                     {
                         // Create new AssetInfo objects with copied string data
                         // We must read all string properties BEFORE disposing the vector
