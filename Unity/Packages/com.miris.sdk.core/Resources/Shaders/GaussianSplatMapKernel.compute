@@ -1,0 +1,113 @@
+#pragma kernel GaussianMapping
+
+//#include "UnityCG.cginc"
+#include "CommonStructs.hlsl"
+#include_with_pragmas "GaussianSplatDecoder.hlsl"
+#include "GaussianSplatting.hlsl"
+#define THREADS_PER_GROUP 1024
+
+RWStructuredBuffer<uint> _SortedSplatIndex;
+RWStructuredBuffer<SplatViewData> _GpuSplat;
+RWStructuredBuffer<uint> _IndirectDrawBuffer;
+RWStructuredBuffer<EyeData> _EyeData;
+
+uint _NumSplats;
+uint _FirstSplat;
+int _SH_Order;
+int _SH_Only;
+int _SH_Count;
+int _BaseOffset;
+
+float4x4 _MatrixObjectToWorld;
+float4x4 _MatrixWorldToObject;
+
+float4 _CameraPosition;
+
+float4 _VecProjectionParams;
+float4 _VecScreenParams;
+int _EyeCount;
+int _EyeDataIndex;
+
+[numthreads(THREADS_PER_GROUP, 1, 1)]
+void GaussianMapping(uint3 id : SV_DispatchThreadID)
+{
+    if(id.x >= _NumSplats) 
+    {
+        return;
+    }
+
+    uint index = _SortedSplatIndex[_FirstSplat + id.x];
+
+    // Load input splat data.
+    float3 position = GetSplatPosition(index);
+    float3 scale = GetSplatScale(index);
+    float4 orientation = GetSplatOrientation(index);
+    float4 color = GetSplatColor(index);
+    SplatSHData shCoefficients = GetSplatSHData(index, _SH_Count);
+    float dataSourceOpacity = GetDataSourceOpacity(index);
+
+    // index to determine which set of eyeData should be used for this phase
+    // in the multi-pass case this will be either 0 or 1 depending on which
+    // eye is being rendered.
+    int eyeDataIndex = _EyeDataIndex;
+
+    for(int storeIndex = 0; storeIndex < _EyeCount; storeIndex++, eyeDataIndex++) {
+
+        // The algorithms in this file used to calculate the splat view position & axis work
+        // under the presumption that the projection in the Y axis is flipped (provided by _ProjectionParams.x == -1)
+        //
+        // For more details, refer to the following docs:
+        // - https://docs.unity3d.com/Manual/SL-UnityShaderVariables.html
+        // - https://docs.unity3d.com/Manual/SL-PlatformDifferences.html
+        //
+        // Thus on platforms where _ProjectionParams.x == +1, we need to reflect the
+        // projection matrix across the Y axis, then reflect the output back to match original orientation.
+    
+        float reflectY = _VecProjectionParams.x;
+        float4x4 projectionMatrix = _EyeData[eyeDataIndex].proj;
+    
+        float4x4 reflectYMatrix = float4x4(1, 0, 0, 0, 0, reflectY, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+
+        projectionMatrix = mul(reflectYMatrix, projectionMatrix);
+        float4x4 viewProjectionMatrix = mul(projectionMatrix, _EyeData[eyeDataIndex].view);
+
+        // Initialize splat view data.
+        SplatViewData splat = (SplatViewData)0;
+
+        // Transform splat center from object space to clip space.
+        float3 splatInWorldSpace = mul(_MatrixObjectToWorld, float4(position, 1)).xyz;
+        float4 splatInClipSpace = mul(viewProjectionMatrix, float4(splatInWorldSpace, 1));
+    
+        //Calculate the Gaussian Covariance. Essentially compute the 3D Gaussian distribution
+        float3x3 cov3d = calculate3DGSCovariance(orientation, scale);
+
+        //Map the 3D Gaussian distribution into a 2d Plane using equation 31 in EWA splatting paper
+    
+        float3 cov2d = map3DGSCovarianceTo2DPlane(position, cov3d, mul(_EyeData[eyeDataIndex].view, _MatrixObjectToWorld), projectionMatrix,
+                                                  _VecScreenParams);
+
+        //Compute the major and minor axis extents. These extents will determine the shape of our quad
+        computeGaussianAxisExtent(cov2d, splat.majorAxis, splat.minorAxis);
+    
+        // Compute SH lighting
+        float3 worldViewDir = _CameraPosition.xyz - splatInWorldSpace;
+        float3 objViewDir = mul((float3x3)_MatrixWorldToObject, worldViewDir);
+        objViewDir = normalize(objViewDir);
+    
+        float3 shColor = ComputeSH(shCoefficients,color.xyz, objViewDir, _SH_Order, _SH_Only, _SH_Count);
+    
+        //Load up the splat data
+        splat.pos = splatInClipSpace;
+        splat.color = float4(shColor,color.a); //contains SH Lighting + alpha
+    
+        splat.color.a *=dataSourceOpacity;
+    
+        // Reflect the output across Y to match original orientation.
+        // See above comment where the reflectY variable is defined.
+        splat.pos.y *= reflectY;
+        splat.majorAxis.y *= reflectY;
+        splat.minorAxis.y *= reflectY;
+    
+        _GpuSplat[id.x+(_BaseOffset*storeIndex)] = splat;
+    }
+}
