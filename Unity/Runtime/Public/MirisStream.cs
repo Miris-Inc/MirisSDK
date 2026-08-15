@@ -253,5 +253,17 @@ namespace Miris.Runtime
             }
             m_modelRootObjectIdToRenderComponent.Clear();
         }
+
+        /// <summary>
+        /// Forces this stream into an unloaded state without going through OnDisable(). Used by
+        /// MirisStreamController.Teardown() when its own OnEnable/OnDisable cycle re-fires (e.g.
+        /// Editor Undo) without this MirisStream's OnDisable running in lockstep -- otherwise this
+        /// stream keeps render components bound to the controller's now-destroyed Client.
+        /// </summary>
+        internal void ForceUnload()
+        {
+            ClearRenderResources();
+            m_loadedAssetId = "";
+        }
     }
 }
