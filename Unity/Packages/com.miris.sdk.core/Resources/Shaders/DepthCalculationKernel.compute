@@ -1,0 +1,98 @@
+// Copyright © 2024 Miris. All rights reserved.
+
+#pragma kernel Calculate3DGSDepth
+#pragma kernel CalculateDepth
+
+#define THREADS_PER_GROUP 1024
+
+#include "UnityCG.cginc"
+#include "CommonStructs.hlsl"
+#include_with_pragmas "GaussianSplatDecoder.hlsl"
+
+//Buffers
+RWStructuredBuffer<float> _SplatDepth;
+RWStructuredBuffer<uint> _SplatIndex;
+RWStructuredBuffer<uint> _MaskedCullFlags;
+RWStructuredBuffer<EyeData> _EyeData;
+
+// uint _PayloadSize;
+uint _NumSplats; 
+
+float4x4 _ModelInWorldSpace;
+
+bool isWithinFrustum(float4x4 projection, float4x4 viewSpace, float4x4 modelInWorldSpace, float3 splatCenter, float splatRadius) {
+
+    float4x4 modelInViewSpace = mul(viewSpace, modelInWorldSpace);
+    float4x4 mvpSpace = mul(projection, modelInViewSpace);
+    
+    float4 splatInClipSpace = mul(mvpSpace, float4(splatCenter, 1.0));
+    float4 splatInNDCSpace = splatInClipSpace;
+    splatInNDCSpace.xyz /= splatInNDCSpace.w;
+
+    float ndcRadius = splatRadius/abs(splatInNDCSpace.w);
+    
+    return (
+        splatInNDCSpace.x + ndcRadius >= -1.0 && splatInNDCSpace.x - ndcRadius <= 1.0 &&
+        splatInNDCSpace.y + ndcRadius >= -1.0 && splatInNDCSpace.y - ndcRadius <= 1.0
+        && splatInNDCSpace.w >= 0.0
+        );
+    
+}
+
+[numthreads(THREADS_PER_GROUP, 1, 1)]
+void Calculate3DGSDepth(uint3 id: SV_DispatchThreadID) {
+    //return if global thread index is greater than the payload size
+    if (id.x >= _NumSplats) {
+        return;
+    }
+
+    // Compute distance of splat to camera.
+    // The distance is used for sorting splats in the subsequent kernels. Using the distance, instead of
+    // depth value (w component) produces stable results.
+    float3 position = GetSplatPosition(id.x);
+    float3 scale = GetSplatScale(id.x);
+    float3 splatInWorldSpace = mul(_ModelInWorldSpace, float4(position, 1.0));
+    
+    float euclidianLeftDistance= length(_EyeData[0].position - splatInWorldSpace);
+    float euclidianRightDistance= length(_EyeData[1].position - splatInWorldSpace);
+    
+    _SplatIndex[id.x] = id.x; //store index
+    _SplatDepth[id.x] = -(euclidianLeftDistance + euclidianRightDistance)*0.5;      //store depth
+    
+    // Test whether center splat is in frustum
+    
+    float splatRadius = max(scale.x, max(scale.y, scale.z));
+    
+    // left eye ndc
+    bool inFrustumLeft = isWithinFrustum(_EyeData[0].proj, _EyeData[0].view, _ModelInWorldSpace, position, splatRadius);
+
+    // right eye ndc
+    bool inFrustumRight = isWithinFrustum(_EyeData[1].proj, _EyeData[1].view, _ModelInWorldSpace, position, splatRadius);
+
+    _MaskedCullFlags[id.x] = int(inFrustumLeft || inFrustumRight) ? 1 : 0;
+    
+}
+
+[numthreads(THREADS_PER_GROUP, 1, 1)]
+void CalculateDepth(uint3 id: SV_DispatchThreadID) 
+{
+    //return if global thread index is greater than the total number of splats
+    if (id.x >= _NumSplats) 
+    {
+        return;
+    }
+
+    float3 splatPosition = GetSplatPosition(id.x);
+    float3 splatInWorldSpace = mul(_ModelInWorldSpace, float4(splatPosition, 1.0));
+
+    // when used in unity this may not be needed as left and right positions are identical
+    //  in _EyeData since they are queried from the same camera. ie. unity does not incorporate 
+    //  the horizontal offset for the stereo eyes in the camera position
+    float euclidianLeftDistance= length(_EyeData[0].position - splatInWorldSpace);
+    float euclidianRightDistance= length(_EyeData[1].position - splatInWorldSpace);
+    float averageDepth = -(euclidianLeftDistance + euclidianRightDistance)*0.5;
+
+    _SplatIndex[id.x] = id.x; //store index
+    _SplatDepth[id.x] = averageDepth; //store depth
+}
+
