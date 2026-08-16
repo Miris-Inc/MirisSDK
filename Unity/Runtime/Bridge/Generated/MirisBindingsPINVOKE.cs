@@ -538,6 +538,12 @@ class MirisBindingsPINVOKE {
 
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_GetMetadata___")]
   public static extern global::System.IntPtr GetMetadata(global::System.IntPtr jarg1, int jarg2, global::System.Runtime.InteropServices.HandleRef jarg3);
+
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_GetAssets___")]
+  public static extern global::System.IntPtr GetAssets(global::System.IntPtr jarg1, global::System.Runtime.InteropServices.HandleRef jarg2, int jarg3);
+
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_GetAvailableTags___")]
+  public static extern global::System.IntPtr GetAvailableTags(global::System.IntPtr jarg1);
 }
 
 }

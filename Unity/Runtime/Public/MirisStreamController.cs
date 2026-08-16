@@ -5,7 +5,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using System.IO;
 
 // Unity engine
@@ -26,24 +25,23 @@ namespace Miris.Runtime
         [NonSerialized]
         public bool m_loadedMetadata = false;
 
-        public enum ExecutionMode
+        internal enum ExecutionMode
         {
             Asynchronous = 0,
             Synchronous
         }
-        [SerializeField]
-        public ExecutionMode m_executionMode = ExecutionMode.Asynchronous;
+        internal ExecutionMode m_executionMode = ExecutionMode.Asynchronous;
         private SceneMetadata m_sceneMetadata;
 
-        [SerializeField]
-        public RuntimeSettings m_runtimeSettings = new RuntimeSettings
+        internal RuntimeSettings m_runtimeSettings = new RuntimeSettings
         {
             m_targetFramesPerSecond = 72.0f,
-            
+
             m_splatCountBudget = 400000,
             m_congestionMinInflightBytes = 256 * 1024,
             m_congestionMaxInflightBytes = 128 * 1024 * 1024,
             m_budgetSplitMode = 1,
+            m_xrModeActive = false,
         };
         // Client instance and API helpers
         private Client m_client;
@@ -75,10 +73,7 @@ namespace Miris.Runtime
             s_profilerPrefix + "Sync Scene"
         );
 
-        [SerializeField]
-        [Range(0.0f, 2.0f)]
-        [Tooltip("Amount of time to fully fade in / out a particular tile.  Set this to 0 to disable the fade effect.")]
-        public float m_fadeDurationSeconds = 0.3f;
+        internal float m_fadeDurationSeconds = 0.3f;
 
         // Tracks the coroutines responsible for transitioning LODs.
         private Dictionary<int, Coroutine> m_fadeCoroutines = new();
@@ -147,6 +142,7 @@ namespace Miris.Runtime
             // Report the true wall-clock frame delta for budget control (unscaled: timeScale must
             // not affect render-loop timing). Runs in LateUpdate before SyncScene's UpdateExecution.
             m_client.RecordFrameTime(Time.unscaledDeltaTime * 1000.0);
+            m_runtimeSettings.m_xrModeActive = XRUtils.IsXR();
             m_client.SetRuntimeSettings(m_runtimeSettings);
         }
 
@@ -293,6 +289,7 @@ namespace Miris.Runtime
                     }
 
                     SetObjectsActiveState(changes.m_changeIds.activatedObjectIds, changes.m_changeIds.deactivatedObjectIds, createdObjectIdsSet);
+                    RemoveDeletedObjects(changes.m_changeIds.deletedObjectIds);
                     UpdateRenderableObjects();
                     changes.m_changeIds.Free();
                 }
@@ -421,6 +418,39 @@ namespace Miris.Runtime
                 if(changeFlags.HasFlag(SceneObjectModifyFlag.TRANSFORM)){
                     UpdateRenderComponentTransform(modifiedObjectId);
                 }
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // Scene object deletion propagation
+        // --------------------------------------------------------------------
+        private void RemoveDeletedObjects(Span<int> deletedObjectIds)
+        {
+            foreach (int sceneObjectId in deletedObjectIds)
+            {
+                if (!m_splatObjectIdToDataSource.TryGetValue(sceneObjectId, out GaussianSplatDataSource dataSource))
+                {
+                    continue;
+                }
+
+                m_splatObjectIdToDataSource.Remove(sceneObjectId);
+
+                // Drop it from whichever model root's renderable list currently holds it, so the
+                // renderer stops being handed a data source whose native scene object is gone.
+                foreach (var dataSources in m_modelRootObjectIdToDataSources.Values)
+                {
+                    if (dataSources.Remove(dataSource))
+                    {
+                        break;
+                    }
+                }
+
+                // We have no safe way to resolve the owning stream for an id whose native scene
+                // object no longer exists, so just stop tracking the coroutine handle. If the fade
+                // is still running it completes harmlessly against the now-orphaned data source.
+                m_fadeCoroutines.Remove(sceneObjectId);
+
+                m_updateRenderableObjects = true;
             }
         }
 
@@ -613,14 +643,18 @@ namespace Miris.Runtime
             foreach (MirisStream stream in streams)
             {
                 RemoveStream(stream);
+                stream.ForceUnload();
             }
 
             m_streamToSceneObjectId.Clear();
+            m_splatObjectIdToDataSource.Clear();
+            m_fadeCoroutines.Clear();
             m_clientConfig = null;
 
             m_scene?.Clear();
 
             // Teardown API objects
+            m_assetManager?.Dispose();
             m_assetManager = null;
             m_scene = null;
             m_sceneMetadata?.Dispose();
