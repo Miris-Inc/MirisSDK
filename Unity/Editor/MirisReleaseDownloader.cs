@@ -249,7 +249,7 @@ namespace Miris.Editor
         // UI on which platforms to download
         private void DrawPlatformSection()
         {
-            EditorGUILayout.LabelField("Platforms (sdk-binaries-PLATFORM*.zip)", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Platforms", EditorStyles.boldLabel);
             using (new EditorGUILayout.VerticalScope("box"))
             {
                 EditorGUILayout.LabelField($"Release: {loadedRelease.tag_name}", EditorStyles.miniBoldLabel);
@@ -437,22 +437,19 @@ namespace Miris.Editor
             }
         }
 
-        // Match: sdk-binaries-PLATFORM*  (case-insensitive)
+        // Match: sdk-PLATFORM-* or sdk-binaries-PLATFORM* (case-insensitive)
         // Supports .zip and .dmg (mac only) file extensions
         private static bool IsPlatformAsset(string filename, Platform p)
         {
             var f = filename.ToLowerInvariant();
-            if (!f.StartsWith("sdk-binaries-")) return false;
-
             string token = p.ToString();
             if (string.IsNullOrEmpty(token) || token == "none") return false;
 
-            var afterPrefix = f.Substring("sdk-binaries-".Length);
+            bool prefixOk = f.StartsWith($"sdk-{token}-") || f.StartsWith($"sdk-binaries-{token}");
+            if (!prefixOk) return false;
 
             bool isMac = (p == Platform.osx);
-            bool endsOk = isMac ? (f.EndsWith(".zip") || f.EndsWith(".dmg")) : f.EndsWith(".zip");
-
-            return afterPrefix.StartsWith(token) && endsOk;
+            return isMac ? (f.EndsWith(".zip") || f.EndsWith(".dmg")) : f.EndsWith(".zip");
         }
 
         // Install selected platforms

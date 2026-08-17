@@ -148,9 +148,9 @@ namespace Miris.Runtime
         /// <param name="tags">A vector of tags for filtering the assets that are retrieved.
         /// The tags are combined using the AND operator, i.e. they are exclusive filters.</param>
         /// <returns>Vector of AssetInfo structs</returns>
-        public AssetInfoVector GetAssets(StringVector tags)
+        public AssetInfoVector GetAssets(StringVector tags, int limit)
         {
-            return MirisBindings.GetAssets(m_handle, tags);
+            return MirisBindings.GetAssets(m_handle, tags, limit);
         }
 
         /// <summary>
