@@ -35,17 +35,101 @@ namespace Miris.Runtime
         [NonSerialized]
         private Dictionary<int, GaussianSplatRenderComponent> m_modelRootObjectIdToRenderComponent = new();
 
+        [NonSerialized]
+        private bool m_firedLoadedActions = false;
+
         public List<Action> m_onLoadActions = new List<Action>();
+        public List<Action> m_onLoadedActions = new List<Action>();
         public List<Action> m_onUnloadedActions = new List<Action>();
+
+        public enum Status
+        {
+            Disabled,
+
+            NoController,
+
+            ControllerInactive,
+
+            NoAssetId,
+
+            NotLoaded,
+
+            Streaming,
+
+            NoData,
+
+            Ready,
+
+            Rendered
+        }
 
         #region Public API
         /// <summary>
-        /// Validates whether the underlying SceneObject is properly initialized
+        /// Validates whether the underlying SceneObject is properly initialized.
+        ///
+        /// Note that this becomes true as soon as the stream is registered with the
+        /// scene, which is well before any render data arrives. Use
+        /// <see cref="GetStatus"/> to tell those apart.
         /// </summary>
         /// <returns>True if the underlying m_sceneObject is non-null, false otherwise</returns>
         public bool IsLoaded()
         {
             return m_sceneObject != null;
+        }
+
+        /// <summary>
+        /// Reports how far this stream has progressed towards rendering. Each state is
+        /// derived from current state on every call, so it always reflects the stream as
+        /// it stands rather than the last transition someone remembered to record.
+        /// </summary>
+        /// <returns>The stream's current <see cref="Status"/></returns>
+        public Status GetStatus()
+        {
+            if (!isActiveAndEnabled)
+            {
+                return Status.Disabled;
+            }
+
+            if (m_streamController == null)
+            {
+                return Status.NoController;
+            }
+
+            if (!m_streamController.IsActive())
+            {
+                return Status.ControllerInactive;
+            }
+
+            if (string.IsNullOrEmpty(m_assetId))
+            {
+                return Status.NoAssetId;
+            }
+
+            if (!IsLoaded())
+            {
+                return Status.NotLoaded;
+            }
+
+            // asset is loaded but there are no components yet
+            if (m_modelRootObjectIdToRenderComponent.Count == 0)
+            {
+                return Status.Streaming;
+            }
+
+            // Any single render component drawing render data is enough to call the whole
+            // stream rendered, matching how the bounds accessors treat components.
+            bool hasValidAsset = false;
+            foreach (GaussianSplatRenderComponent renderComponent in m_modelRootObjectIdToRenderComponent.Values)
+            {
+                if (renderComponent.GetSplatCount() > 0)
+                {
+                    return Status.Rendered;
+                }
+
+                hasValidAsset |= renderComponent.IsAssetValid();
+            }
+
+            return hasValidAsset ? Status.Ready : Status.NoData;
         }
 
         public Bounds GetObjectBounds()
@@ -67,19 +151,15 @@ namespace Miris.Runtime
 
         public Bounds GetWorldBounds()
         {
-            // TODO: Cache this when data sources get updated
-
-            Vector3 minBound = Vector3.positiveInfinity;
-            Vector3 maxBound = Vector3.negativeInfinity;
-            foreach (var renderComponent in m_modelRootObjectIdToRenderComponent.Values)
+            // The scene object only exists between registration and unload, so callers that run
+            // outside that window (gizmos, framing polled before load) get an empty bounds rather
+            // than a null dereference.
+            if (!IsLoaded())
             {
-                minBound = Vector3.Min(minBound, renderComponent.GetWorldBounds().min);
-                maxBound = Vector3.Max(maxBound, renderComponent.GetWorldBounds().max);
+                return new Bounds();
             }
 
-            Bounds bounds = new();
-            bounds.SetMinMax(minBound, maxBound);
-            return bounds;
+            return m_sceneObject.GetWorldBoundingBox();
         }
 
         public GaussianSplatRenderComponent[] GetRenderComponents()
@@ -123,6 +203,8 @@ namespace Miris.Runtime
             {
                 renderComponent.Update(transform);
             }
+
+            CheckDataLoaded();
         }
 
         protected void OnDrawGizmosSelected()
@@ -153,7 +235,7 @@ namespace Miris.Runtime
             MirisDebug.Log($"Loading stream with asset {m_assetId}");
             m_loadedAssetId = m_assetId;
 
-            // Invoke attempt load stream ballbacks
+            // Invoke attempt load stream callbacks
             foreach (Action action in m_onLoadActions)
             {
                 action.Invoke();
@@ -174,8 +256,40 @@ namespace Miris.Runtime
             }
             m_loadedAssetId = "";
 
+            // Arm the loaded callbacks again so that the next asset fires them.
+            m_firedLoadedActions = false;
+
             // Invoke unloaded stream ballbacks
             foreach (Action action in m_onUnloadedActions)
+            {
+                action.Invoke();
+            }
+        }
+
+        /// <summary>
+        /// Invokes the loaded callbacks the first time this stream holds renderable data.
+        ///
+        /// There is no single point in the load path to hang this off: the controller
+        /// creates render components and populates their data sources from its own
+        /// LateUpdate, so arrival is detected by polling rather than announced.
+        /// </summary>
+        private void CheckDataLoaded()
+        {
+            if (m_firedLoadedActions)
+            {
+                return;
+            }
+
+            Status status = GetStatus();
+            if (status != Status.Ready && status != Status.Rendered)
+            {
+                return;
+            }
+
+            m_firedLoadedActions = true;
+
+            // Invoke loaded stream callbacks
+            foreach (Action action in m_onLoadedActions)
             {
                 action.Invoke();
             }
@@ -252,6 +366,18 @@ namespace Miris.Runtime
                 renderComponent.Dispose();
             }
             m_modelRootObjectIdToRenderComponent.Clear();
+        }
+
+        /// <summary>
+        /// Forces this stream into an unloaded state without going through OnDisable(). Used by
+        /// MirisStreamController.Teardown() when its own OnEnable/OnDisable cycle re-fires (e.g.
+        /// Editor Undo) without this MirisStream's OnDisable running in lockstep -- otherwise this
+        /// stream keeps render components bound to the controller's now-destroyed Client.
+        /// </summary>
+        internal void ForceUnload()
+        {
+            ClearRenderResources();
+            m_loadedAssetId = "";
         }
     }
 }
