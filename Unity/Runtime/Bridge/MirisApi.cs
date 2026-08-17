@@ -87,12 +87,6 @@ namespace Miris.Runtime
         [DllImport(AquaUnityPath)]
         static public extern AquaStatus SetAssetViewerKey(ClientHandle client, string key);
 
-        [DllImport(AquaUnityPath)]
-        static public extern IntPtr GetDefaultEnvironment(ClientHandle client);
-
-        [DllImport(AquaUnityPath)]
-        static public extern AquaStatus SetServerEnvironmentAsync(ClientHandle client, string environment, SetServerEnvironmentCallback callback, IntPtr userData);
-
         // ---------------------------------------------------------------
         // Utility API
         // ---------------------------------------------------------------
