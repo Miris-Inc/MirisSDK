@@ -23,6 +23,35 @@ public class MirisBindings {
     return ret;
   }
 
+  public static AssetInfoVector GetAssets(global::System.IntPtr client, StringVector tags, int limit) {
+    AssetInfoVector ret = new AssetInfoVector(MirisBindingsPINVOKE.GetAssets(client, StringVector.getCPtr(tags), limit), true);
+    if (MirisBindingsPINVOKE.SWIGPendingException.Pending) throw MirisBindingsPINVOKE.SWIGPendingException.Retrieve();
+    return ret;
+  }
+
+  public static AssetInfoResult GetAssetsPaginatedBlocking(global::System.IntPtr client, StringVector tags, int limit, string cursor, PageDirection direction) {
+    AssetInfoResult ret = new AssetInfoResult(MirisBindingsPINVOKE.GetAssetsPaginatedBlocking__SWIG_0(client, StringVector.getCPtr(tags), limit, cursor, (int)direction), true);
+    if (MirisBindingsPINVOKE.SWIGPendingException.Pending) throw MirisBindingsPINVOKE.SWIGPendingException.Retrieve();
+    return ret;
+  }
+
+  public static AssetInfoResult GetAssetsPaginatedBlocking(global::System.IntPtr client, StringVector tags, int limit, string cursor) {
+    AssetInfoResult ret = new AssetInfoResult(MirisBindingsPINVOKE.GetAssetsPaginatedBlocking__SWIG_1(client, StringVector.getCPtr(tags), limit, cursor), true);
+    if (MirisBindingsPINVOKE.SWIGPendingException.Pending) throw MirisBindingsPINVOKE.SWIGPendingException.Retrieve();
+    return ret;
+  }
+
+  public static AssetInfoResult GetAssetsPaginatedBlocking(global::System.IntPtr client, StringVector tags, int limit) {
+    AssetInfoResult ret = new AssetInfoResult(MirisBindingsPINVOKE.GetAssetsPaginatedBlocking__SWIG_2(client, StringVector.getCPtr(tags), limit), true);
+    if (MirisBindingsPINVOKE.SWIGPendingException.Pending) throw MirisBindingsPINVOKE.SWIGPendingException.Retrieve();
+    return ret;
+  }
+
+  public static StringVector GetAvailableTags(global::System.IntPtr client) {
+    StringVector ret = new StringVector(MirisBindingsPINVOKE.GetAvailableTags(client), true);
+    return ret;
+  }
+
 }
 
 }
