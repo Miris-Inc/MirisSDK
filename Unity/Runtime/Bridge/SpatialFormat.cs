@@ -3,10 +3,10 @@
 // This is a valid C++ and C# file :)
 
 #if __cplusplus
-#define public
+#define public 
 #else
 #define USING_CSHARP
-#endif
+#endif 
 
 #if USING_CSHARP
 
@@ -19,23 +19,23 @@ namespace Miris.Runtime
 #endif
 
 #if __cplusplus
-public enum class UpAxis
+public enum class UpAxis 
 #else
-public enum UpAxis
+public enum UpAxis 
 #endif
 { X, Y, Z };
 
 #if __cplusplus
-public enum class MatrixOrder
+public enum class MatrixOrder 
 #else
-public enum MatrixOrder
+public enum MatrixOrder 
 #endif
 { RowMajor, ColumnMajor };
 
 #if __cplusplus
-public enum class Handedness
+public enum class Handedness 
 #else
-public enum Handedness
+public enum Handedness 
 #endif
 { Left, Right };
 
