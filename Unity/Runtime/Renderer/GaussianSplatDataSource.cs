@@ -130,7 +130,7 @@ namespace Miris.Runtime
         {
             if (m_dirty)
             {
-                m_bounds = m_object.GetBoundingBox();
+                m_bounds = m_object.GetLocalBoundingBox();
             }
             return m_bounds;
         }
