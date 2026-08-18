@@ -461,8 +461,8 @@ namespace Miris.Runtime
                     foreach (var dataSource in m_dataSources)
                     {
                         Bounds dataSourceBounds = dataSource.GetObjectBounds();
-                        minWorldBound = Vector3.Min(minBound, dataSourceBounds.min);
-                        maxWorldBound = Vector3.Max(maxBound, dataSourceBounds.max);
+                        minWorldBound = Vector3.Min(minWorldBound, dataSourceBounds.min);
+                        maxWorldBound = Vector3.Max(maxWorldBound, dataSourceBounds.max);
                     }
                     m_dataWorldBounds.SetMinMax(minWorldBound, maxWorldBound);
 

@@ -56,77 +56,61 @@ class MirisBindingsPINVOKE {
                                 ExceptionArgumentDelegate argumentOutOfRangeDelegate);
 
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
-
     static void SetPendingApplicationException(string message) {
       SWIGPendingException.Set(new global::System.ApplicationException(message, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
     static void SetPendingArithmeticException(string message) {
       SWIGPendingException.Set(new global::System.ArithmeticException(message, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
     static void SetPendingDivideByZeroException(string message) {
       SWIGPendingException.Set(new global::System.DivideByZeroException(message, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
     static void SetPendingIndexOutOfRangeException(string message) {
       SWIGPendingException.Set(new global::System.IndexOutOfRangeException(message, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
     static void SetPendingInvalidCastException(string message) {
       SWIGPendingException.Set(new global::System.InvalidCastException(message, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
     static void SetPendingInvalidOperationException(string message) {
       SWIGPendingException.Set(new global::System.InvalidOperationException(message, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
     static void SetPendingIOException(string message) {
       SWIGPendingException.Set(new global::System.IO.IOException(message, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
     static void SetPendingNullReferenceException(string message) {
       SWIGPendingException.Set(new global::System.NullReferenceException(message, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
     static void SetPendingOutOfMemoryException(string message) {
       SWIGPendingException.Set(new global::System.OutOfMemoryException(message, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
     static void SetPendingOverflowException(string message) {
       SWIGPendingException.Set(new global::System.OverflowException(message, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
     static void SetPendingSystemException(string message) {
       SWIGPendingException.Set(new global::System.SystemException(message, SWIGPendingException.Retrieve()));
     }
 
     [AOT.MonoPInvokeCallback(typeof(ExceptionArgumentDelegate))]
-
-
     static void SetPendingArgumentException(string message, string paramName) {
       SWIGPendingException.Set(new global::System.ArgumentException(message, paramName, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionArgumentDelegate))]
-
     static void SetPendingArgumentNullException(string message, string paramName) {
       global::System.Exception e = SWIGPendingException.Retrieve();
       if (e != null) message = message + " Inner Exception: " + e.Message;
       SWIGPendingException.Set(new global::System.ArgumentNullException(paramName, message));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionArgumentDelegate))]
-
     static void SetPendingArgumentOutOfRangeException(string message, string paramName) {
       global::System.Exception e = SWIGPendingException.Retrieve();
       if (e != null) message = message + " Inner Exception: " + e.Message;
@@ -210,8 +194,6 @@ class MirisBindingsPINVOKE {
     public static extern void SWIGRegisterStringCallback_MirisBindings(SWIGStringDelegate stringDelegate);
 
     [AOT.MonoPInvokeCallback(typeof(SWIGStringDelegate))]
-
-
     static string CreateString(string cString) {
       return cString;
     }
@@ -222,38 +204,6 @@ class MirisBindingsPINVOKE {
   }
 
   static protected SWIGStringHelper swigStringHelper = new SWIGStringHelper();
-
-
-  public class SWIGStringWithLengthHelper {
-
-    [global::System.Runtime.InteropServices.DllImport("MirisBindings", EntryPoint="SWIG_csharp_string_to_c")]
-    private static extern global::System.IntPtr SWIG_csharp_string_to_c0(int size, int len, [global::System.Runtime.InteropServices.In,global::System.Runtime.InteropServices.MarshalAs(global::System.Runtime.InteropServices.UnmanagedType.LPStr, SizeParamIndex=0)] string str);
-
-    [global::System.Runtime.InteropServices.DllImport("MirisBindings", EntryPoint="SWIG_csharp_string_size")]
-    private static extern int SWIG_csharp_string_size(global::System.IntPtr str);
-
-    [global::System.Runtime.InteropServices.DllImport("MirisBindings", EntryPoint="SWIG_csharp_string_str")]
-    private static extern global::System.IntPtr SWIG_csharp_string_str(global::System.IntPtr str);
-
-    public static global::System.IntPtr SWIG_csharp_string_to_c(string str) {
-      if (str == null)
-        return global::System.IntPtr.Zero;
-      global::System.Text.Encoding utf8 = global::System.Text.Encoding.UTF8;
-      return SWIG_csharp_string_to_c0(utf8.GetByteCount(str), str.Length, str);
-    }
-
-    public static string SWIG_c_to_csharp_string(global::System.IntPtr str) {
-      int size = SWIG_csharp_string_size(str);
-      if (size > 0) {
-        global::System.IntPtr s = SWIG_csharp_string_str(str);
-        byte[] b = new byte[size];
-        global::System.Runtime.InteropServices.Marshal.Copy(s, b, 0, size);
-        global::System.Text.Encoding utf8 = global::System.Text.Encoding.UTF8;
-        return utf8.GetString(b);
-      }
-      return null;
-    }
-  }
 
 
   static MirisBindingsPINVOKE() {
@@ -538,6 +488,12 @@ class MirisBindingsPINVOKE {
 
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_GetMetadata___")]
   public static extern global::System.IntPtr GetMetadata(global::System.IntPtr jarg1, int jarg2, global::System.Runtime.InteropServices.HandleRef jarg3);
+
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_GetAssets___")]
+  public static extern global::System.IntPtr GetAssets(global::System.IntPtr jarg1, global::System.Runtime.InteropServices.HandleRef jarg2, int jarg3);
+
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_GetAvailableTags___")]
+  public static extern global::System.IntPtr GetAvailableTags(global::System.IntPtr jarg1);
 }
 
 }
