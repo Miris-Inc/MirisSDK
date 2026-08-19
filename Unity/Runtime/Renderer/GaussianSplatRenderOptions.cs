@@ -23,16 +23,16 @@ namespace Miris.Runtime
 
         [SerializeField]
         [Range(0.0f, 3.0f)]
-        public float m_gaussianSigmaThreshold = 2.5f;
+        public float m_gaussianSigmaThreshold = 3.0f;
 
         [SerializeField]
         [Range(0.0f, 1.0f)]
-        public float m_alphaCullingThreshold = 0.06f;
+        public float m_alphaCullingThreshold = 0.002f;
 
         [SerializeField]
         [Range(0, 3)]
         [Tooltip("Spherical Harmonics order to use")]
-        public int m_SHOrder = 0;
+        public int m_SHOrder = 3;
 
         // ---------------------------------------------------------
         // Geometry Renderer Specific Options
