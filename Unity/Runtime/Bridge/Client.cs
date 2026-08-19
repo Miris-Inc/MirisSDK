@@ -148,9 +148,23 @@ namespace Miris.Runtime
         /// <param name="tags">A vector of tags for filtering the assets that are retrieved.
         /// The tags are combined using the AND operator, i.e. they are exclusive filters.</param>
         /// <returns>Vector of AssetInfo structs</returns>
-        public AssetInfoVector GetAssets(StringVector tags)
+        public AssetInfoVector GetAssets(StringVector tags, int limit)
         {
-            return MirisBindings.GetAssets(m_handle, tags);
+            return MirisBindings.GetAssets(m_handle, tags, limit);
+        }
+
+        /// <summary>
+        /// Retrieve all available assets from the server environment, together with pagination cursors (blocking).
+        /// Pass the cursor from a previous AssetInfoResult (m_nextCursor/m_prevCursor) along with the matching
+        /// PageDirection to fetch the next/previous page. Leave both at their defaults for the initial request.
+        /// </summary>
+        /// <param name="tags">A vector of tags for filtering the assets that are retrieved.
+        /// The tags are combined using the AND operator, i.e. they are exclusive filters.</param>
+        /// <returns>AssetInfoResult containing the assets and the next/prev pagination cursors</returns>
+        public AssetInfoResult GetAssetsPaginatedBlocking(StringVector tags, int limit, string cursor = "",
+            PageDirection direction = PageDirection.None)
+        {
+            return MirisBindings.GetAssetsPaginatedBlocking(m_handle, tags, limit, cursor, direction);
         }
 
         /// <summary>
@@ -321,9 +335,14 @@ namespace Miris.Runtime
             MirisBindings.GetMetadata(m_handle, sceneObjectId, metadata);
         }
 
-        public void GetBoundingBox(int sceneObjectId, float[] boundingBox)
+        public void GetLocalBoundingBox(int sceneObjectId, float[] boundingBox)
         {
             MirisApi.GetLocalBoundingBox(m_handle, sceneObjectId, boundingBox);
+        }
+
+        public void GetWorldBoundingBox(int sceneObjectId, float[] boundingBox)
+        {
+             MirisApi.GetWorldBoundingBox(m_handle, sceneObjectId, boundingBox);
         }
 
         public int GetLodIndex(int sceneObjectId)
