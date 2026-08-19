@@ -87,12 +87,6 @@ namespace Miris.Runtime
         [DllImport(AquaUnityPath)]
         static public extern AquaStatus SetAssetViewerKey(ClientHandle client, string key);
 
-        [DllImport(AquaUnityPath)]
-        static public extern IntPtr GetDefaultEnvironment(ClientHandle client);
-
-        [DllImport(AquaUnityPath)]
-        static public extern AquaStatus SetServerEnvironmentAsync(ClientHandle client, string environment, SetServerEnvironmentCallback callback, IntPtr userData);
-
         // ---------------------------------------------------------------
         // Utility API
         // ---------------------------------------------------------------
@@ -207,6 +201,9 @@ namespace Miris.Runtime
 
         [DllImport(AquaUnityPath)]
         static public extern AquaStatus GetLocalBoundingBox(ClientHandle client, int sceneObjectId, float[] boundingBox);
+
+        [DllImport(AquaUnityPath)]
+        static public extern AquaStatus GetWorldBoundingBox(ClientHandle client, int sceneObjectId, float[] boundingBox);
 
         [DllImport(AquaUnityPath)]
         static public extern int GetLodIndex(ClientHandle client, int sceneObjectId);

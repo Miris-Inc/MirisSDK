@@ -79,10 +79,10 @@ namespace Miris.Runtime
         // ---------------------------------------------------------
         // Common Renderer Options
         // ---------------------------------------------------------
-        public float m_gaussianSigmaThreshold = 2.5f;
+        public float m_gaussianSigmaThreshold = 3.0f;
 
-        public float m_alphaCullingThreshold = 0.06f;
-        public int m_SHOrder = 0;
+        public float m_alphaCullingThreshold = 0.002f;
+        public int m_SHOrder = 3;
 
         // ---------------------------------------------------------
         // Geometry Renderer Specific Options
@@ -461,8 +461,8 @@ namespace Miris.Runtime
                     foreach (var dataSource in m_dataSources)
                     {
                         Bounds dataSourceBounds = dataSource.GetObjectBounds();
-                        minWorldBound = Vector3.Min(minBound, dataSourceBounds.min);
-                        maxWorldBound = Vector3.Max(maxBound, dataSourceBounds.max);
+                        minWorldBound = Vector3.Min(minWorldBound, dataSourceBounds.min);
+                        maxWorldBound = Vector3.Max(maxWorldBound, dataSourceBounds.max);
                     }
                     m_dataWorldBounds.SetMinMax(minWorldBound, maxWorldBound);
 
