@@ -225,6 +225,7 @@ namespace Miris.Runtime
             public static readonly int AlphaCullingThreshold = Shader.PropertyToID("_AlphaCullingThreshold");
             public static readonly int NearClipThreshold = Shader.PropertyToID("_NearClipThreshold");
             public static readonly int FadeLargeSplats = Shader.PropertyToID("_FadeLargeSplats");
+            public static readonly int BlurAmount = Shader.PropertyToID("_BlurAmount");
 
             public static readonly int EyeData = Shader.PropertyToID("_EyeData");
             public static readonly int BaseOffset = Shader.PropertyToID("_BaseOffset");
@@ -729,6 +730,9 @@ namespace Miris.Runtime
             commandBuffer.SetComputeIntParam(m_map3DGSShader, ShaderIds.SHOnly, shOnly ? 1 : 0);
             commandBuffer.SetComputeIntParam(m_map3DGSShader, ShaderIds.SHCount, m_shCount);
             
+            // Blur amount for anti-aliasing compensation (matches Spork's blurAmount default)
+            commandBuffer.SetComputeFloatParam(m_map3DGSShader, ShaderIds.BlurAmount, 0.3f);
+
             var (threadGroupCountX, _, _) = ComputeKernelUtils.CalculateThreadGroupCount(m_map3DGSShader,
                 m_map3DGSKernel, splatsToMapCount);
             commandBuffer.DispatchCompute(m_map3DGSShader, m_map3DGSKernel, threadGroupCountX, 1, 1);
