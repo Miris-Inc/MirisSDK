@@ -27,7 +27,7 @@ float4 _VecProjectionParams;
 float4 _VecScreenParams;
 int _EyeCount;
 int _EyeDataIndex;
-
+float _BlurAmount; // Default 0.3
 [numthreads(THREADS_PER_GROUP, 1, 1)]
 void GaussianMapping(uint3 id : SV_DispatchThreadID)
 {
@@ -81,10 +81,11 @@ void GaussianMapping(uint3 id : SV_DispatchThreadID)
         //Calculate the Gaussian Covariance. Essentially compute the 3D Gaussian distribution
         float3x3 cov3d = calculate3DGSCovariance(orientation, scale);
 
-        //Map the 3D Gaussian distribution into a 2d Plane using equation 31 in EWA splatting paper
-    
-        float3 cov2d = map3DGSCovarianceTo2DPlane(position, cov3d, mul(_EyeData[eyeDataIndex].view, _MatrixObjectToWorld), projectionMatrix,
-                                                  _VecScreenParams);
+        // Map the 3D Gaussian distribution into a 2d Plane
+        // use blur-compensated version
+        float blurAdjust;
+        float3 cov2d = map3DGSCovarianceTo2DPlaneWithBlur(position, cov3d, mul(_EyeData[eyeDataIndex].view, _MatrixObjectToWorld), projectionMatrix,
+                                                          _VecScreenParams, _BlurAmount, blurAdjust);
 
         //Compute the major and minor axis extents. These extents will determine the shape of our quad
         computeGaussianAxisExtent(cov2d, splat.majorAxis, splat.minorAxis);
@@ -100,7 +101,15 @@ void GaussianMapping(uint3 id : SV_DispatchThreadID)
         splat.pos = splatInClipSpace;
         splat.color = float4(shColor,color.a); //contains SH Lighting + alpha
     
-        splat.color.a *=dataSourceOpacity;
+        // handle opaque splats (alpha > 1.0) - stretch alpha range
+        // alpha 1.0->2.0 is stretched to 1.0->5.0 for "opaque" splats
+        if (splat.color.a > 1.0) {
+            splat.color.a = min(splat.color.a * 4.0 - 3.0, 5.0);
+        }
+    
+        // apply blur compensation and data source opacity to alpha
+        // blurAdjust preserves integrated intensity after low-pass filter
+        splat.color.a *= blurAdjust * dataSourceOpacity;
     
         // Reflect the output across Y to match original orientation.
         // See above comment where the reflectY variable is defined.
