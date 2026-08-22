@@ -56,77 +56,61 @@ class MirisBindingsPINVOKE {
                                 ExceptionArgumentDelegate argumentOutOfRangeDelegate);
 
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
-
     static void SetPendingApplicationException(string message) {
       SWIGPendingException.Set(new global::System.ApplicationException(message, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
     static void SetPendingArithmeticException(string message) {
       SWIGPendingException.Set(new global::System.ArithmeticException(message, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
     static void SetPendingDivideByZeroException(string message) {
       SWIGPendingException.Set(new global::System.DivideByZeroException(message, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
     static void SetPendingIndexOutOfRangeException(string message) {
       SWIGPendingException.Set(new global::System.IndexOutOfRangeException(message, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
     static void SetPendingInvalidCastException(string message) {
       SWIGPendingException.Set(new global::System.InvalidCastException(message, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
     static void SetPendingInvalidOperationException(string message) {
       SWIGPendingException.Set(new global::System.InvalidOperationException(message, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
     static void SetPendingIOException(string message) {
       SWIGPendingException.Set(new global::System.IO.IOException(message, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
     static void SetPendingNullReferenceException(string message) {
       SWIGPendingException.Set(new global::System.NullReferenceException(message, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
     static void SetPendingOutOfMemoryException(string message) {
       SWIGPendingException.Set(new global::System.OutOfMemoryException(message, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
     static void SetPendingOverflowException(string message) {
       SWIGPendingException.Set(new global::System.OverflowException(message, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionDelegate))]
-
     static void SetPendingSystemException(string message) {
       SWIGPendingException.Set(new global::System.SystemException(message, SWIGPendingException.Retrieve()));
     }
 
     [AOT.MonoPInvokeCallback(typeof(ExceptionArgumentDelegate))]
-
-
     static void SetPendingArgumentException(string message, string paramName) {
       SWIGPendingException.Set(new global::System.ArgumentException(message, paramName, SWIGPendingException.Retrieve()));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionArgumentDelegate))]
-
     static void SetPendingArgumentNullException(string message, string paramName) {
       global::System.Exception e = SWIGPendingException.Retrieve();
       if (e != null) message = message + " Inner Exception: " + e.Message;
       SWIGPendingException.Set(new global::System.ArgumentNullException(paramName, message));
     }
     [AOT.MonoPInvokeCallback(typeof(ExceptionArgumentDelegate))]
-
     static void SetPendingArgumentOutOfRangeException(string message, string paramName) {
       global::System.Exception e = SWIGPendingException.Retrieve();
       if (e != null) message = message + " Inner Exception: " + e.Message;
@@ -210,8 +194,6 @@ class MirisBindingsPINVOKE {
     public static extern void SWIGRegisterStringCallback_MirisBindings(SWIGStringDelegate stringDelegate);
 
     [AOT.MonoPInvokeCallback(typeof(SWIGStringDelegate))]
-
-
     static string CreateString(string cString) {
       return cString;
     }
@@ -222,38 +204,6 @@ class MirisBindingsPINVOKE {
   }
 
   static protected SWIGStringHelper swigStringHelper = new SWIGStringHelper();
-
-
-  public class SWIGStringWithLengthHelper {
-
-    [global::System.Runtime.InteropServices.DllImport("MirisBindings", EntryPoint="SWIG_csharp_string_to_c")]
-    private static extern global::System.IntPtr SWIG_csharp_string_to_c0(int size, int len, [global::System.Runtime.InteropServices.In,global::System.Runtime.InteropServices.MarshalAs(global::System.Runtime.InteropServices.UnmanagedType.LPStr, SizeParamIndex=0)] string str);
-
-    [global::System.Runtime.InteropServices.DllImport("MirisBindings", EntryPoint="SWIG_csharp_string_size")]
-    private static extern int SWIG_csharp_string_size(global::System.IntPtr str);
-
-    [global::System.Runtime.InteropServices.DllImport("MirisBindings", EntryPoint="SWIG_csharp_string_str")]
-    private static extern global::System.IntPtr SWIG_csharp_string_str(global::System.IntPtr str);
-
-    public static global::System.IntPtr SWIG_csharp_string_to_c(string str) {
-      if (str == null)
-        return global::System.IntPtr.Zero;
-      global::System.Text.Encoding utf8 = global::System.Text.Encoding.UTF8;
-      return SWIG_csharp_string_to_c0(utf8.GetByteCount(str), str.Length, str);
-    }
-
-    public static string SWIG_c_to_csharp_string(global::System.IntPtr str) {
-      int size = SWIG_csharp_string_size(str);
-      if (size > 0) {
-        global::System.IntPtr s = SWIG_csharp_string_str(str);
-        byte[] b = new byte[size];
-        global::System.Runtime.InteropServices.Marshal.Copy(s, b, 0, size);
-        global::System.Text.Encoding utf8 = global::System.Text.Encoding.UTF8;
-        return utf8.GetString(b);
-      }
-      return null;
-    }
-  }
 
 
   static MirisBindingsPINVOKE() {
@@ -340,6 +290,9 @@ class MirisBindingsPINVOKE {
 
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_delete_StringVector___")]
   public static extern void delete_StringVector(global::System.Runtime.InteropServices.HandleRef jarg1);
+
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_GetSizeOfDataForCompressionType___")]
+  public static extern uint GetSizeOfDataForCompressionType(int jarg1);
 
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_AssetInfo_m_uuid_set___")]
   public static extern void AssetInfo_m_uuid_set(global::System.Runtime.InteropServices.HandleRef jarg1, string jarg2);
@@ -515,29 +468,62 @@ class MirisBindingsPINVOKE {
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_delete_AssetInfoVector___")]
   public static extern void delete_AssetInfoVector(global::System.Runtime.InteropServices.HandleRef jarg1);
 
-  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_new_StringArrayCallback___")]
-  public static extern global::System.IntPtr new_StringArrayCallback();
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_AssetInfoResult_m_assets_set___")]
+  public static extern void AssetInfoResult_m_assets_set(global::System.Runtime.InteropServices.HandleRef jarg1, global::System.Runtime.InteropServices.HandleRef jarg2);
 
-  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_delete_StringArrayCallback___")]
-  public static extern void delete_StringArrayCallback(global::System.Runtime.InteropServices.HandleRef jarg1);
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_AssetInfoResult_m_assets_get___")]
+  public static extern global::System.IntPtr AssetInfoResult_m_assets_get(global::System.Runtime.InteropServices.HandleRef jarg1);
 
-  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_StringArrayCallback_onDataReceived___")]
-  public static extern void StringArrayCallback_onDataReceived(global::System.Runtime.InteropServices.HandleRef jarg1, global::System.Runtime.InteropServices.HandleRef jarg2);
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_AssetInfoResult_m_nextCursor_set___")]
+  public static extern void AssetInfoResult_m_nextCursor_set(global::System.Runtime.InteropServices.HandleRef jarg1, string jarg2);
 
-  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_new_AssetInfoArrayCallback___")]
-  public static extern global::System.IntPtr new_AssetInfoArrayCallback();
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_AssetInfoResult_m_nextCursor_get___")]
+  public static extern string AssetInfoResult_m_nextCursor_get(global::System.Runtime.InteropServices.HandleRef jarg1);
 
-  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_delete_AssetInfoArrayCallback___")]
-  public static extern void delete_AssetInfoArrayCallback(global::System.Runtime.InteropServices.HandleRef jarg1);
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_AssetInfoResult_m_prevCursor_set___")]
+  public static extern void AssetInfoResult_m_prevCursor_set(global::System.Runtime.InteropServices.HandleRef jarg1, string jarg2);
 
-  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_AssetInfoArrayCallback_onDataReceived___")]
-  public static extern void AssetInfoArrayCallback_onDataReceived(global::System.Runtime.InteropServices.HandleRef jarg1, global::System.Runtime.InteropServices.HandleRef jarg2);
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_AssetInfoResult_m_prevCursor_get___")]
+  public static extern string AssetInfoResult_m_prevCursor_get(global::System.Runtime.InteropServices.HandleRef jarg1);
+
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_new_AssetInfoResult__SWIG_0___")]
+  public static extern global::System.IntPtr new_AssetInfoResult__SWIG_0();
+
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_delete_AssetInfoResult___")]
+  public static extern void delete_AssetInfoResult(global::System.Runtime.InteropServices.HandleRef jarg1);
+
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_new_AssetInfoResult__SWIG_1___")]
+  public static extern global::System.IntPtr new_AssetInfoResult__SWIG_1(global::System.Runtime.InteropServices.HandleRef jarg1, string jarg2, string jarg3);
+
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_new_AssetInfoResult__SWIG_2___")]
+  public static extern global::System.IntPtr new_AssetInfoResult__SWIG_2(global::System.Runtime.InteropServices.HandleRef jarg1, string jarg2);
+
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_new_AssetInfoResult__SWIG_3___")]
+  public static extern global::System.IntPtr new_AssetInfoResult__SWIG_3(global::System.Runtime.InteropServices.HandleRef jarg1);
+
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_AssetInfoResult_isPage___")]
+  public static extern bool AssetInfoResult_isPage(global::System.Runtime.InteropServices.HandleRef jarg1);
 
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_GetSceneMetadata___")]
-  public static extern global::System.IntPtr GetSceneMetadata(global::System.IntPtr jarg1, global::System.Runtime.InteropServices.HandleRef jarg2);
+  public static extern int GetSceneMetadata(global::System.IntPtr jarg1, global::System.Runtime.InteropServices.HandleRef jarg2);
 
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_GetMetadata___")]
-  public static extern global::System.IntPtr GetMetadata(global::System.IntPtr jarg1, int jarg2, global::System.Runtime.InteropServices.HandleRef jarg3);
+  public static extern int GetMetadata(global::System.IntPtr jarg1, int jarg2, global::System.Runtime.InteropServices.HandleRef jarg3);
+
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_GetAssets___")]
+  public static extern global::System.IntPtr GetAssets(global::System.IntPtr jarg1, global::System.Runtime.InteropServices.HandleRef jarg2, int jarg3);
+
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_GetAssetsPaginatedBlocking__SWIG_0___")]
+  public static extern global::System.IntPtr GetAssetsPaginatedBlocking__SWIG_0(global::System.IntPtr jarg1, global::System.Runtime.InteropServices.HandleRef jarg2, int jarg3, string jarg4, int jarg5);
+
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_GetAssetsPaginatedBlocking__SWIG_1___")]
+  public static extern global::System.IntPtr GetAssetsPaginatedBlocking__SWIG_1(global::System.IntPtr jarg1, global::System.Runtime.InteropServices.HandleRef jarg2, int jarg3, string jarg4);
+
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_GetAssetsPaginatedBlocking__SWIG_2___")]
+  public static extern global::System.IntPtr GetAssetsPaginatedBlocking__SWIG_2(global::System.IntPtr jarg1, global::System.Runtime.InteropServices.HandleRef jarg2, int jarg3);
+
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_GetAvailableTags___")]
+  public static extern global::System.IntPtr GetAvailableTags(global::System.IntPtr jarg1);
 }
 
 }
