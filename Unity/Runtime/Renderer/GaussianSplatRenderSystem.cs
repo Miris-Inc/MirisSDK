@@ -58,6 +58,13 @@ namespace Miris.Runtime
         private XRUtils m_xrUtils = new XRUtils();
         private RenderTextureDescriptor m_xrTextureDescriptor;
 
+        // Selects the single-pass instanced stereo path in both the splat draw shader and the
+        // composite shader.
+        private const string c_singlePassStereoKeyword = "MIRIS_SINGLE_PASS_STEREO";
+
+        // Guards the unsupported-multiview warning so it is logged once, not once per frame.
+        private bool m_hasWarnedUnsupportedMultiview = false;
+
         // For binding shaders parameters.
         private static class ShaderIds
         {
@@ -118,13 +125,10 @@ namespace Miris.Runtime
             m_compositeMaterial.EnableKeyword("USING_URP");
 #endif
 
-            if (m_compositeMaterial != null && m_xrUtils.IsSinglePassXR()) {
-                m_compositeMaterial.EnableKeyword("STEREO_MULTIVIEW_ON");
-            }
-
-            // Set XR texture descriptor
-            m_xrTextureDescriptor = XRSettings.eyeTextureDesc;
-            m_xrTextureDescriptor.graphicsFormat = GraphicsFormat.R8G8B8A8_UNorm;
+            // The stereo mode and the eye texture descriptor are deliberately not captured
+            // here. Platforms whose compositor configures asynchronously report a placeholder
+            // mode and descriptor for the first frames, and CreateSystemResources runs inside
+            // that window. RefreshXrRenderState re-reads both every frame instead.
 
             if (UsingBuiltinRenderPipeline()) {
                 MirisDebug.Log("Installing Camera.onPreCull callback");
@@ -243,7 +247,87 @@ namespace Miris.Runtime
             }
         }
 
+        // Returns whether the platform has actually populated XRSettings.eyeTextureDesc.
+        // eyeTextureDesc disagreeing with eyeTextureWidth/Height is the tell that it has not.
+        private static bool HasValidXrTextureDescriptor()
+        {
+            RenderTextureDescriptor eyeDescriptor = XRSettings.eyeTextureDesc;
+
+            return XRSettings.eyeTextureWidth > 0
+                && XRSettings.eyeTextureHeight > 0
+                && eyeDescriptor.width == XRSettings.eyeTextureWidth
+                && eyeDescriptor.height == XRSettings.eyeTextureHeight;
+        }
+
+        // Re-reads the stereo rendering mode and eye texture descriptor for the current frame.
+        //
+        // These cannot be captured once. visionOS reports MultiPass with a 256x256 placeholder
+        // descriptor while Compositor Services configures, then switches to SinglePassInstanced
+        // with a Tex2DArray descriptor a few frames later. Anything captured inside that window
+        // leaves the render target and the composite built for different stereo modes for the
+        // rest of the session.
+        private void RefreshXrRenderState(Camera camera)
+        {
+            // Instanced only, not IsSinglePassXR: the eye unpacking in the splat and composite
+            // shaders assumes the doubled instance stream that single-pass instancing produces.
+            // Multiview reports as single-pass but does not double it, so it must not take this
+            // path -- doing so halves every splat index and derives the eye from splat parity.
+            bool isSinglePassInstanced = m_xrUtils.IsSinglePassInstancedXR();
+
+            // Set the keyword globally rather than on the composite material: the splat draw
+            // shader needs the same variant and draws with its own materials.
+            if (isSinglePassInstanced)
+            {
+                Shader.EnableKeyword(c_singlePassStereoKeyword);
+            }
+            else
+            {
+                Shader.DisableKeyword(c_singlePassStereoKeyword);
+            }
+
+            // The splat path has no multiview variant: the composite samples a texture array by
+            // slice using an eye index recovered from the instance stream, which multiview does
+            // not supply. Report it rather than rendering a wrong image in silence.
+            if (!m_hasWarnedUnsupportedMultiview && m_xrUtils.IsSinglePassMultiviewXR())
+            {
+                m_hasWarnedUnsupportedMultiview = true;
+                Debug.LogWarning("[GaussianSplatRenderSystem] Single-pass multiview is not supported by " +
+                    "the current render path. Use Multi-pass, or a graphics API whose Single Pass " +
+                    "Instanced mode resolves to instancing rather than multiview.");
+            }
+
+            // Only the stereo paths size their render target from the descriptor.
+            if (!m_xrUtils.IsStereo())
+            {
+                return;
+            }
+
+            bool hasValidDescriptor = HasValidXrTextureDescriptor();
+
+            if (hasValidDescriptor)
+            {
+                m_xrTextureDescriptor = XRSettings.eyeTextureDesc;
+                m_xrTextureDescriptor.graphicsFormat = GraphicsFormat.R8G8B8A8_UNorm;
+            }
+            else if (!m_xrUtils.IsSinglePassXR() && camera != null)
+            {
+                // Deliberately the broad single-pass check, not isSinglePassInstanced: multiview
+                // needs the descriptor's Tex2DArray layout just as instancing does, so neither
+                // single-pass mode can fall back to this camera-sized Tex2D. Only multi-pass can.
+                m_xrTextureDescriptor = new RenderTextureDescriptor(camera.pixelWidth, camera.pixelHeight)
+                {
+                    graphicsFormat = GraphicsFormat.R8G8B8A8_UNorm,
+                    depthBufferBits = 0,
+                    dimension = TextureDimension.Tex2D,
+                    volumeDepth = 1,
+                    msaaSamples = 1
+                };
+            }
+        }
+
         public void Render(Camera camera, CommandBuffer commandBuffer) {
+            RefreshXrRenderState(camera);
+
             if (UsingBuiltinRenderPipeline()) {
                 RenderUsingBuiltinPipeline(camera, commandBuffer);
                 return;
@@ -257,6 +341,15 @@ namespace Miris.Runtime
         // Add graphics commands for active renderers.
         private void RenderUsingBuiltinPipeline(Camera camera, CommandBuffer commandBuffer)
         {
+            // RefreshXrRenderState could not produce a usable eye texture descriptor for this
+            // frame, which happens while a platform's compositor is still configuring. Skip the
+            // pass rather than allocating a degenerate render target from it.
+            if (m_xrUtils.IsStereo() &&
+                (m_xrTextureDescriptor.width <= 0 || m_xrTextureDescriptor.height <= 0))
+            {
+                return;
+            }
+
             using (s_renderMarker.Auto())
             {
                 // Create a fully transparent temporary texture to render all our splats on-to, front to back.
@@ -310,7 +403,9 @@ namespace Miris.Runtime
                     m_commandBuffer.SetRenderTarget(BuiltinRenderTextureType.CameraTarget);
                 }
                 
-                m_commandBuffer.DrawProcedural(Matrix4x4.identity, m_compositeMaterial, 0, MeshTopology.Triangles, 6, m_xrUtils.IsSinglePassXR()?2:1);
+                // One instance, even for single-pass instanced stereo: Unity supplies the
+                // second instance for the second eye.
+                m_commandBuffer.DrawProcedural(Matrix4x4.identity, m_compositeMaterial, 0, MeshTopology.Triangles, 6, 1);
                 m_commandBuffer.ReleaseTemporaryRT(ShaderIds.GaussianSplatRT);
                 m_commandBuffer.EndSample(s_compositeMarker);
             }
