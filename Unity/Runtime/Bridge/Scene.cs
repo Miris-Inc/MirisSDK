@@ -1,9 +1,5 @@
 // Copyright © 2026 Miris, Inc. All rights reserved.
 
-using AOT;
-using System.Runtime.InteropServices;
-using System.Threading.Tasks;
-
 using UnityEngine;
 
 namespace Miris.Runtime
@@ -87,9 +83,7 @@ namespace Miris.Runtime
 
         public void GetLodMinMaxIndices(out int minLodIndex, out int maxLodIndex)
         {
-            minLodIndex = 0;
-            maxLodIndex = 0;
-            m_client.GetLodMinMaxIndices(ref minLodIndex, ref maxLodIndex);
+            m_client.GetLodMinMaxIndices(out minLodIndex, out maxLodIndex);
         }
 
         public void GetMetadata(SceneMetadata metadata){
