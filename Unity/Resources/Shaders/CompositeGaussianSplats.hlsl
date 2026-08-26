@@ -3,6 +3,10 @@
 #pragma vertex vert
 #pragma fragment frag
 
+// Must match the variant declared in RenderGaussianSplats.hlsl: the keyword is set globally,
+// so the splat draw and this composite always agree on the stereo path.
+#pragma multi_compile _ MIRIS_SINGLE_PASS_STEREO
+
 #if defined(USING_URP)
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 #else
@@ -15,7 +19,7 @@
 #endif
 #include "CommonConstants.hlsl"
 
-#ifdef STEREO_MULTIVIEW_ON
+#ifdef MIRIS_SINGLE_PASS_STEREO
 Texture2DArray _GaussianSplatRT;
 SamplerState sampler_GaussianSplatRT;
 #define sample_Gaussian(tex, sampler,uv, texSize) SAMPLE_TEXTURE2D_ARRAY(tex, sampler,uv,unity_StereoEyeIndex);
@@ -43,6 +47,13 @@ struct v2f {
 
 v2f vert(uint vtxID : SV_VertexID, uint instanceID: SV_InstanceID) {
     v2f o;
+
+    // The composite draws one instance per eye and nothing else sets unity_StereoEyeIndex on
+    // this path, so the instance ID *is* the eye. UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO below
+    // copies it into the SV_RenderTargetArrayIndex that routes each eye to its array slice.
+#ifdef MIRIS_SINGLE_PASS_STEREO
+    unity_StereoEyeIndex = instanceID;
+#endif
 
     //fetch the quad vertices
     o.vertex = float4(quadPositionsInClipSpace[vtxID], 0.0, 1.0);
