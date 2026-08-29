@@ -3,6 +3,12 @@
 #pragma vertex vert
 #pragma fragment frag
 
+// Declared here rather than in RenderGaussianSplats.shader: every pass includes this file
+// with #include_with_pragmas, so one declaration covers all of them and cannot drift out of
+// sync. Unity cannot set unity_StereoEyeIndex for us via UNITY_SETUP_INSTANCE_ID here,
+// because SV_InstanceID is already the splat index.
+#pragma multi_compile _ MIRIS_SINGLE_PASS_STEREO
+
 #include "GaussianSplatting.hlsl"
 #include_with_pragmas "GaussianSplatDecoder.hlsl"
 
@@ -25,6 +31,7 @@ static const float _QuadHalfLength = 2.0;
 // the vert shader
 #define EARLY_PRIM_DISCARD \
     vertexOutput.splatCenterClipPosition = asfloat(0x7fc00000); \
+    UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(vertexOutput); \
     return vertexOutput; 
 
 // Vertex shader output.
@@ -42,10 +49,26 @@ inline float GaussianSigmaScale()
     return _GaussianSigmaThreshold / 3.0;
 }
 
+// Calculate Gaussian alpha with support for opaque splats (alpha > 1.0)
 inline float CalculateGaussianAlpha(VertexOutput vertexOutput)
 {
-    float power = -dot(vertexOutput.quadNDCPosition, vertexOutput.quadNDCPosition);
-    return vertexOutput.color.a * exp(power) * (1.0 - vertexOutput.splatFade);
+    float z2 = dot(vertexOutput.quadNDCPosition, vertexOutput.quadNDCPosition);
+    float alpha = vertexOutput.color.a;
+    float fadeFactor = 1.0 - vertexOutput.splatFade;
+    
+    if (alpha <= 1.0) {
+        // Standard Gaussian falloff for semi-transparent splats
+        // Note: Uses -z2 (not -0.5*z2) to match Unity's existing quad scale conventions
+        float power = -z2;
+        return alpha * exp(power) * fadeFactor;
+    } else {
+        // Opaque splat falloff - creates filled-in disc effect
+        // Uses a modified falloff that approaches 1.0 for high alpha values
+        float a = exp((alpha * alpha - 1.0) / 2.718281828459045);
+        float gaussianTerm = 1.0 - exp(-z2);
+        float opaqueAlpha = 1.0 - pow(gaussianTerm, a);
+        return opaqueAlpha * fadeFactor;
+    }
 }
 
 // Attempt to compute a fade value based on the splat size 
@@ -70,7 +93,18 @@ inline float CalculateLargeSplatFade(SplatViewData splatData)
 // "instanceId" maps to a single splat.
 VertexOutput vert(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID) {
     
-    int baseOffset = unity_StereoEyeIndex * _EyeStride;
+    // Unity packs both eyes into the instance stream for single-pass instanced stereo, and
+    // nothing else sets unity_StereoEyeIndex on this path, so unpack the eye from the low bit
+    // and recover the splat index. Done before any use of instanceId below.
+#ifdef MIRIS_SINGLE_PASS_STEREO
+    uint eyeIndex = instanceId & 1u;
+    instanceId = instanceId >> 1u;
+    unity_StereoEyeIndex = eyeIndex;
+#else
+    uint eyeIndex = 0u;
+#endif
+
+    int baseOffset = (int)eyeIndex * _EyeStride;
     SplatViewData splatView = _GpuSplat[instanceId + baseOffset];
     
     VertexOutput vertexOutput;
@@ -103,7 +137,14 @@ VertexOutput vert(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID) 
     vertexOutput.quadNDCPosition *= _QuadHalfLength;
 
     // Clip the quad size by gaussian sigma threshold
-    vertexOutput.quadNDCPosition *= GaussianSigmaScale();
+    // for opaque splats (alpha > 1.0), expand the cutoff 
+    float sigmaScale = GaussianSigmaScale();
+    if (vertexOutput.color.a > 1.0) {
+        float baseStdDev = _GaussianSigmaThreshold;
+        float adjustedStdDev = min(1.5 * baseStdDev, baseStdDev + 0.7 * (vertexOutput.color.a - 1.0));
+        sigmaScale = adjustedStdDev / 3.0;
+    }
+    vertexOutput.quadNDCPosition *= sigmaScale;
 
     // Transform the quad vertex based on splat view center + axis.
     float2 deltaScreenPosition =
@@ -127,7 +168,14 @@ float4 frag(VertexOutput vertexOutput) : SV_Target {
     UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(vertexOutput);
     
     // Further clip the square quad, by discarding fragments outside of the inscribed circle.
-    float radius = GaussianSigmaScale() * _QuadHalfLength;
+    // for opaque splats (alpha > 1.0), use expanded radius to match vertex shader scaling
+    float sigmaScale = GaussianSigmaScale();
+    if (vertexOutput.color.a > 1.0) {
+        float baseStdDev = _GaussianSigmaThreshold;
+        float adjustedStdDev = min(1.5 * baseStdDev, baseStdDev + 0.7 * (vertexOutput.color.a - 1.0));
+        sigmaScale = adjustedStdDev / 3.0;
+    }
+    float radius = sigmaScale * _QuadHalfLength;
     if (length(vertexOutput.quadNDCPosition) > radius) {
         discard;
     }
