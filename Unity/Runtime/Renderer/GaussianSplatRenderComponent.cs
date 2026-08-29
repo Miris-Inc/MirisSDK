@@ -79,10 +79,10 @@ namespace Miris.Runtime
         // ---------------------------------------------------------
         // Common Renderer Options
         // ---------------------------------------------------------
-        public float m_gaussianSigmaThreshold = 2.5f;
+        public float m_gaussianSigmaThreshold = 3.0f;
 
-        public float m_alphaCullingThreshold = 0.06f;
-        public int m_SHOrder = 0;
+        public float m_alphaCullingThreshold = 0.002f;
+        public int m_SHOrder = 3;
 
         // ---------------------------------------------------------
         // Geometry Renderer Specific Options
@@ -100,9 +100,12 @@ namespace Miris.Runtime
             GeometryRenderer.GeometryDrawMode.BoundingBoxOnly,
             GeometryRenderer.GeometryDrawMode.BoundingLocatorOnly
         };
+        
+        public const int DefaultLodHeatMapMinLodIndex = 0;
+        public const int DefaultLodHeatMapMaxLodIndex = 4;
 
-        public int m_lodHeatMapMinLodIndex = 0;
-        public int m_lodHeatMapMaxLodIndex = 5;
+        public int m_lodHeatMapMinLodIndex = DefaultLodHeatMapMinLodIndex;
+        public int m_lodHeatMapMaxLodIndex = DefaultLodHeatMapMaxLodIndex;
 
         public float m_nearClipThreshold = 0.25f;
         public bool m_fadeLargeSplats = false;
@@ -461,8 +464,8 @@ namespace Miris.Runtime
                     foreach (var dataSource in m_dataSources)
                     {
                         Bounds dataSourceBounds = dataSource.GetObjectBounds();
-                        minWorldBound = Vector3.Min(minBound, dataSourceBounds.min);
-                        maxWorldBound = Vector3.Max(maxBound, dataSourceBounds.max);
+                        minWorldBound = Vector3.Min(minWorldBound, dataSourceBounds.min);
+                        maxWorldBound = Vector3.Max(maxWorldBound, dataSourceBounds.max);
                     }
                     m_dataWorldBounds.SetMinMax(minWorldBound, maxWorldBound);
 
@@ -554,15 +557,7 @@ namespace Miris.Runtime
 
         private float4 MapLodIndexToColor(int lodIndex)
         {
-            float lodIndexNormalized = 0.0f;
-
-            int minMaxDifference = m_lodHeatMapMaxLodIndex - m_lodHeatMapMinLodIndex;
-            if (minMaxDifference > 0)
-            {
-                lodIndexNormalized = (lodIndex - m_lodHeatMapMinLodIndex) / (float)minMaxDifference;
-            }
-
-            return ColorUtils.HueToRgba(1.0f - lodIndexNormalized);
+            return ColorUtils.LodIndexToRgba(lodIndex, m_lodHeatMapMinLodIndex, m_lodHeatMapMaxLodIndex);
         }
     }
 }
