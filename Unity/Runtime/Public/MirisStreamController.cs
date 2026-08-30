@@ -5,7 +5,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using System.IO;
 
 // Unity engine
@@ -26,24 +25,23 @@ namespace Miris.Runtime
         [NonSerialized]
         public bool m_loadedMetadata = false;
 
-        public enum ExecutionMode
+        internal enum ExecutionMode
         {
             Asynchronous = 0,
             Synchronous
         }
-        [SerializeField]
-        public ExecutionMode m_executionMode = ExecutionMode.Asynchronous;
+        internal ExecutionMode m_executionMode = ExecutionMode.Asynchronous;
         private SceneMetadata m_sceneMetadata;
 
-        [SerializeField]
-        public RuntimeSettings m_runtimeSettings = new RuntimeSettings
+        internal RuntimeSettings m_runtimeSettings = new RuntimeSettings
         {
             m_targetFramesPerSecond = 72.0f,
-            
+
             m_splatCountBudget = 400000,
             m_congestionMinInflightBytes = 256 * 1024,
             m_congestionMaxInflightBytes = 128 * 1024 * 1024,
             m_budgetSplitMode = 1,
+            m_xrModeActive = false,
         };
         // Client instance and API helpers
         private Client m_client;
@@ -75,10 +73,7 @@ namespace Miris.Runtime
             s_profilerPrefix + "Sync Scene"
         );
 
-        [SerializeField]
-        [Range(0.0f, 2.0f)]
-        [Tooltip("Amount of time to fully fade in / out a particular tile.  Set this to 0 to disable the fade effect.")]
-        public float m_fadeDurationSeconds = 0.3f;
+        internal float m_fadeDurationSeconds = 0.3f;
 
         // Tracks the coroutines responsible for transitioning LODs.
         private Dictionary<int, Coroutine> m_fadeCoroutines = new();
@@ -86,9 +81,36 @@ namespace Miris.Runtime
         // Lazily update the renderable objects only when data source's active state changes.
         private bool m_updateRenderableObjects = false;
 
-        private ClientConfig m_clientConfig;
+        internal ClientConfig m_clientConfig;
 
-        public bool fadeLargeSplats
+        [SerializeField]
+        [Tooltip("Asset viewer key used by the AssetManager. Use SetViewerKey() to change it at runtime; an empty/whitespace value falls back to the key configured in ClientConfig.")]
+        private string m_viewerKey = "";
+
+        /// <summary>
+        /// Current viewer key in effect. Use <see cref="SetViewerKey"/> to change it — assigning
+        /// a field directly would leave the AssetManager out of sync.
+        /// </summary>
+        public string ViewerKey => m_viewerKey;
+
+        /// <summary>
+        /// Raised whenever the effective viewer key changes (Initialize(), SetViewerKey(), or an
+        /// Inspector edit via OnValidate). Lets other packages (e.g. app_kit) observe and react —
+        /// e.g. to keep dev UI or persisted preferences in sync — without MirisStreamController
+        /// needing to know they exist.
+        /// </summary>
+        public event Action<string> ViewerKeyChanged;
+
+        /// <summary>
+        /// Raised from inside SyncScene's SceneChangeTracker scope, so an alternative renderer can
+        /// consume the same changes without calling the destructive GetSceneChanges drain itself.
+        ///
+        /// Handlers run with the scene lock held and must consume the Changes synchronously -
+        /// SyncScene frees them on return, so the struct must not be retained.
+        /// </summary>
+        public event Action<SceneChangeTracker.Changes> SceneChangesDrained;
+
+        internal bool fadeLargeSplats
         {
             get
             {
@@ -147,6 +169,7 @@ namespace Miris.Runtime
             // Report the true wall-clock frame delta for budget control (unscaled: timeScale must
             // not affect render-loop timing). Runs in LateUpdate before SyncScene's UpdateExecution.
             m_client.RecordFrameTime(Time.unscaledDeltaTime * 1000.0);
+            m_runtimeSettings.m_xrModeActive = XRUtils.IsXR();
             m_client.SetRuntimeSettings(m_runtimeSettings);
         }
 
@@ -293,7 +316,11 @@ namespace Miris.Runtime
                     }
 
                     SetObjectsActiveState(changes.m_changeIds.activatedObjectIds, changes.m_changeIds.deactivatedObjectIds, createdObjectIdsSet);
+                    RemoveDeletedObjects(changes.m_changeIds.deletedObjectIds);
                     UpdateRenderableObjects();
+                    // After this controller's own bookkeeping, while the lock is still held and
+                    // before the arrays are freed. See SceneChangesDrained.
+                    SceneChangesDrained?.Invoke(changes);
                     changes.m_changeIds.Free();
                 }
             }
@@ -340,7 +367,7 @@ namespace Miris.Runtime
         // --------------------------------------------------------------------
         // Control temporary stall of render culling
         // -------------------------------------------------------------------- 
-        public void ToggleRenderComponentCulling()
+        internal void ToggleRenderComponentCulling()
         {
             List<GaussianSplatRenderComponent> renderComponents = GetRenderComponents();
             foreach (GaussianSplatRenderComponent renderComponent in renderComponents)
@@ -425,6 +452,39 @@ namespace Miris.Runtime
         }
 
         // --------------------------------------------------------------------
+        // Scene object deletion propagation
+        // --------------------------------------------------------------------
+        private void RemoveDeletedObjects(Span<int> deletedObjectIds)
+        {
+            foreach (int sceneObjectId in deletedObjectIds)
+            {
+                if (!m_splatObjectIdToDataSource.TryGetValue(sceneObjectId, out GaussianSplatDataSource dataSource))
+                {
+                    continue;
+                }
+
+                m_splatObjectIdToDataSource.Remove(sceneObjectId);
+
+                // Drop it from whichever model root's renderable list currently holds it, so the
+                // renderer stops being handed a data source whose native scene object is gone.
+                foreach (var dataSources in m_modelRootObjectIdToDataSources.Values)
+                {
+                    if (dataSources.Remove(dataSource))
+                    {
+                        break;
+                    }
+                }
+
+                // We have no safe way to resolve the owning stream for an id whose native scene
+                // object no longer exists, so just stop tracking the coroutine handle. If the fade
+                // is still running it completes harmlessly against the now-orphaned data source.
+                m_fadeCoroutines.Remove(sceneObjectId);
+
+                m_updateRenderableObjects = true;
+            }
+        }
+
+        // --------------------------------------------------------------------
         // Scene object active state management
         // --------------------------------------------------------------------
         private void SetObjectsActiveState(Span<int> activeObjectIds, Span<int> deactivatedObjectIds, HashSet<int> createdObjectIdsSet)
@@ -464,6 +524,39 @@ namespace Miris.Runtime
             }
         }
 
+        /// Widest span of per-object LOD depths across every live data source. Leaves the range
+        /// untouched when nothing is loaded yet, so the caller keeps whatever it started with.
+        private void GetLodIndexRangeFromDataSources(ref int minLodIndex, ref int maxLodIndex)
+        {
+            int lowest = int.MaxValue;
+            int highest = int.MinValue;
+
+            foreach (List<GaussianSplatDataSource> dataSources in m_modelRootObjectIdToDataSources.Values)
+            {
+                foreach (GaussianSplatDataSource dataSource in dataSources)
+                {
+                    if (dataSource == null || !dataSource.IsValid())
+                    {
+                        continue;
+                    }
+
+                    int lodIndex = dataSource.GetLodIndex();
+                    lowest = Math.Min(lowest, lodIndex);
+                    highest = Math.Max(highest, lodIndex);
+                }
+            }
+
+            if (lowest > highest)
+            {
+                minLodIndex = GaussianSplatRenderComponent.DefaultLodHeatMapMinLodIndex;
+                maxLodIndex = GaussianSplatRenderComponent.DefaultLodHeatMapMaxLodIndex;
+                return;
+            }
+
+            minLodIndex = lowest;
+            maxLodIndex = highest;
+        }
+
         // --------------------------------------------------------------------
         // Update renderables
         // --------------------------------------------------------------------
@@ -475,6 +568,10 @@ namespace Miris.Runtime
             }
 
             m_scene.GetLodMinMaxIndices(out int minLodIndex, out int maxLodIndex);
+            if (minLodIndex == maxLodIndex)
+            {
+                GetLodIndexRangeFromDataSources(ref minLodIndex, ref maxLodIndex);
+            }
 
             // Update the data sources of each render component.
             foreach (var pair in m_streamToModelRootObjectIds)
@@ -585,14 +682,48 @@ namespace Miris.Runtime
             // Initialize client config.
             m_clientConfig = ClientConfig.Load();
 
-            // Seed the viewer key for the default ENV from config resource; it may be dynamically changed thereafter
-            string viewerKey = m_clientConfig.GetAssetViewerKey();
-            if (viewerKey != null)
-            {
-                m_assetManager.SetViewerKey(viewerKey);
-            }
+            // Seed with precedence: an existing value already on this component (e.g. saved into
+            // the scene/prefab via the Inspector) wins; otherwise fall back to ClientConfig's default.
+            SetViewerKey(m_viewerKey);
 
             PreparePersistentDataDir(m_client);
+        }
+
+        private void ApplyViewerKey()
+        {
+            if (m_assetManager == null)
+            {
+                return;
+            }
+
+            m_assetManager.SetViewerKey(m_viewerKey);
+            ViewerKeyChanged?.Invoke(m_viewerKey);
+        }
+
+        /// <summary>
+        /// Normalizes a requested viewer key: trims surrounding whitespace, and falls back to
+        /// whatever ClientConfig provides by default if the result is empty (e.g. null, "", or
+        /// whitespace-only). This is how a caller "clears" an override back to the default.
+        /// </summary>
+        private string NormalizeViewerKey(string viewerKey)
+        {
+            string trimmed = viewerKey?.Trim();
+            if (!string.IsNullOrEmpty(trimmed))
+            {
+                return trimmed;
+            }
+
+            return m_clientConfig != null ? m_clientConfig.GetAssetViewerKey() : "";
+        }
+
+        /// <summary>
+        /// Changes the viewer key at runtime and pushes it to the AssetManager immediately. Pass
+        /// null, empty, or whitespace to reset back to the default key configured in ClientConfig.
+        /// </summary>
+        public void SetViewerKey(string viewerKey)
+        {
+            m_viewerKey = NormalizeViewerKey(viewerKey);
+            ApplyViewerKey();
         }
 
         static private void PreparePersistentDataDir(Client client)
@@ -613,14 +744,18 @@ namespace Miris.Runtime
             foreach (MirisStream stream in streams)
             {
                 RemoveStream(stream);
+                stream.ForceUnload();
             }
 
             m_streamToSceneObjectId.Clear();
+            m_splatObjectIdToDataSource.Clear();
+            m_fadeCoroutines.Clear();
             m_clientConfig = null;
 
             m_scene?.Clear();
 
             // Teardown API objects
+            m_assetManager?.Dispose();
             m_assetManager = null;
             m_scene = null;
             m_sceneMetadata?.Dispose();
@@ -643,6 +778,15 @@ namespace Miris.Runtime
         protected void OnDisable()
         {
             Teardown();
+        }
+
+        protected void OnValidate()
+        {
+            // Normalize Inspector edits to m_viewerKey (trim, or fall back to ClientConfig's
+            // default if cleared) and push the result straight to the AssetManager, if it already
+            // exists (e.g. edits made in edit mode or while in Play mode).
+            m_viewerKey = NormalizeViewerKey(m_viewerKey);
+            ApplyViewerKey();
         }
 
         protected void Start()

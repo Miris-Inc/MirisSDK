@@ -109,6 +109,14 @@ namespace Miris.Runtime
 
         private bool m_disposed;
 
+        // Whether UpdateResources actually allocated the GPU and compute buffers. It skips them
+        // entirely for a data source set that carries no splats yet, while UpdateRenderer assigns
+        // this renderer before calling it - so "the renderer exists" and "the renderer can draw"
+        // are genuinely different questions. GaussianSplatRenderComponent.CanRender asks this one.
+        private bool m_resourcesReady;
+
+        public bool HasResources => m_resourcesReady && !m_disposed;
+
         // ---------------------------------------------------------
         // Profiling
         // ---------------------------------------------------------
@@ -205,10 +213,14 @@ namespace Miris.Runtime
                     m_splatCount += dataSource.GetSplatCount();
                 }
 
+                // Set after the calls, not from m_splatCount alone: if either throws, the buffers
+                // are half-built and this renderer must not be handed to the render system.
+                m_resourcesReady = false;
                 if (m_splatCount > 0)
                 {
                     UpdateGraphicsResources(dataSources);
                     UpdateComputeResources(dataSources);
+                    m_resourcesReady = true;
                 }
 
                 foreach (var dataSource in dataSources)
@@ -346,8 +358,21 @@ namespace Miris.Runtime
 
         public void UpdateDataSourceProperties(GaussianSplatDataSource[] dataSources)
         {
-            Debug.Assert(m_dataSourceOpacity != null);
-            Debug.Assert(dataSources.Length == m_dataSourceOpacity.Length, $"data sources length: {dataSources.Length}, opacity array length: {m_dataSourceOpacity.Length}");
+            if (m_dataSourceOpacity == null)
+            {
+                return;
+            }
+
+            // The loop below writes one entry per data source, so a longer dataSources would run off
+            // the end of the opacity array.
+            if (dataSources.Length != m_dataSourceOpacity.Length)
+            {
+                Debug.Assert(false,
+                             $"[GaussianSplatRenderer] {dataSources.Length} data sources but the "
+                             + $"opacity buffer holds {m_dataSourceOpacity.Length} - skipping this update");
+                return;
+            }
+
             for (uint dataSourceIndex = 0; dataSourceIndex < dataSources.Length; ++dataSourceIndex)
             {
                 m_dataSourceOpacity[dataSourceIndex] = dataSources[dataSourceIndex].m_opacity;
