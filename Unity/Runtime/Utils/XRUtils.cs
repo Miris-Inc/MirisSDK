@@ -3,7 +3,9 @@ using System.Collections.Generic;
 
 using UnityEngine;
 using UnityEngine.XR;
+#if MIRIS_ENABLE_XR_MANAGEMENT
 using UnityEngine.XR.Management;
+#endif
 
 namespace Miris.Runtime
 {
@@ -18,16 +20,25 @@ namespace Miris.Runtime
         // in order to account for distance to the floor when spawning assets at the ground
         public const float c_desktopUserHeight = 1.6f;
 
+        // XR Management (com.unity.xr.management) is an optional dependency.
         static public bool IsXR()
         {
+#if MIRIS_ENABLE_XR_MANAGEMENT
             XRLoader xrLoader = XRGeneralSettings.Instance?.Manager?.activeLoader;
             return xrLoader != null && !string.IsNullOrWhiteSpace(xrLoader.name);
+#else
+            return false;
+#endif
         }
 
-        static public bool IsAR() 
+        static public bool IsAR()
         {
+#if MIRIS_ENABLE_XR_MANAGEMENT
             XRLoader xrLoader = XRGeneralSettings.Instance?.Manager?.activeLoader;
             return xrLoader != null && xrLoader.name.Contains("AR");
+#else
+            return false;
+#endif
         }
 
         // TODO:: Move subsystem to be a member variable to reduce cost of instantiating new subsystem list every call
@@ -76,6 +87,31 @@ namespace Miris.Runtime
             return XRSettings.stereoRenderingMode == XRSettings.StereoRenderingMode.SinglePassInstanced ||
                    XRSettings.stereoRenderingMode == XRSettings.StereoRenderingMode.SinglePassMultiview;
 
+        }
+
+        // Single-pass instanced only, as distinct from IsSinglePassXR which also covers
+        // multiview. The OpenXR render mode is a single control labelled "Single Pass Instanced \
+        // Multi-view" that resolves to instancing on D3D11/Metal and to multiview on Vulkan/GLES.
+        // The two differ in the shader: instancing doubles the instance stream and packs the eye
+        // into its low bit, multiview does not and supplies the eye through the view index.
+        public bool IsSinglePassInstancedXR()
+        {
+            if (!XRSettings.enabled)
+            {
+                return false;
+            }
+
+            return XRSettings.stereoRenderingMode == XRSettings.StereoRenderingMode.SinglePassInstanced;
+        }
+
+        public bool IsSinglePassMultiviewXR()
+        {
+            if (!XRSettings.enabled)
+            {
+                return false;
+            }
+
+            return XRSettings.stereoRenderingMode == XRSettings.StereoRenderingMode.SinglePassMultiview;
         }
 
         public bool IsMultiPassXR() 
