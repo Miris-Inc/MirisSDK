@@ -79,10 +79,10 @@ namespace Miris.Runtime
         // ---------------------------------------------------------
         // Common Renderer Options
         // ---------------------------------------------------------
-        public float m_gaussianSigmaThreshold = 2.5f;
+        public float m_gaussianSigmaThreshold = 3.0f;
 
-        public float m_alphaCullingThreshold = 0.06f;
-        public int m_SHOrder = 0;
+        public float m_alphaCullingThreshold = 0.002f;
+        public int m_SHOrder = 3;
 
         // ---------------------------------------------------------
         // Geometry Renderer Specific Options
@@ -100,9 +100,12 @@ namespace Miris.Runtime
             GeometryRenderer.GeometryDrawMode.BoundingBoxOnly,
             GeometryRenderer.GeometryDrawMode.BoundingLocatorOnly
         };
+        
+        public const int DefaultLodHeatMapMinLodIndex = 0;
+        public const int DefaultLodHeatMapMaxLodIndex = 4;
 
-        public int m_lodHeatMapMinLodIndex = 0;
-        public int m_lodHeatMapMaxLodIndex = 5;
+        public int m_lodHeatMapMinLodIndex = DefaultLodHeatMapMinLodIndex;
+        public int m_lodHeatMapMaxLodIndex = DefaultLodHeatMapMaxLodIndex;
 
         public float m_nearClipThreshold = 0.25f;
         public bool m_fadeLargeSplats = false;
@@ -151,10 +154,45 @@ namespace Miris.Runtime
         // Public API
         // ---------------------------------------------------------
 
+        // Set at construction, by whoever owns the stream. True when something other than
+        // GaussianSplatRenderSystem draws these splats - Shark, through SplatRenderer - in which case
+        // this component must do neither of the two things it otherwise does: register with the
+        // system (which would draw the same splats a second time) or build its GPU renderer (which
+        // would cost VRAM for an asset already resident in the other renderer).
+
+        private bool m_suppressRendering;
+
+        // This is the data source array bounds were last computed from -
+        // on the suppressed path only.
+        private GaussianSplatDataSource[] m_prevBoundsDataSources;
+
         // Called when this component is enabled.
-        public GaussianSplatRenderComponent()
+        public GaussianSplatRenderComponent(bool suppressRendering = false)
         {
-            GaussianSplatRenderSystem.m_instance.RegisterRenderer(this);
+            m_suppressRendering = suppressRendering;
+            if (!m_suppressRendering)
+            {
+                GaussianSplatRenderSystem.m_instance.RegisterRenderer(this);
+            }
+        }
+
+        // Changes who draws these splats, for a component that already exists.
+        internal void SetRenderingSuppressed(bool suppressed)
+        {
+            if (m_suppressRendering == suppressed)
+            {
+                return;
+            }
+            m_suppressRendering = suppressed;
+
+            if (suppressed)
+            {
+                GaussianSplatRenderSystem.m_instance.UnregisterRenderer(this);
+            }
+            else
+            {
+                GaussianSplatRenderSystem.m_instance.RegisterRenderer(this);
+            }
         }
 
         // Called when this component is disabled.
@@ -245,6 +283,22 @@ namespace Miris.Runtime
             }
 
             m_transform = new MirisTransform(transform) * m_assetMatrix; // TODO: Maybe make this a struct so we don't keep reallocing?
+
+            if (m_suppressRendering)
+            {
+                // Everything past here either allocates the renderer or configures it, and
+                // configuring a renderer that was never allocated is how this used to throw. The
+                // transform above is kept up to date because it costs nothing and an external
+                // renderer may still want to read it.
+                //
+                // We still need to keep bounds up to date.
+                if (!ReferenceEquals(m_prevBoundsDataSources, m_dataSources))
+                {
+                    m_prevBoundsDataSources = m_dataSources;
+                    UpdateBounds(m_dataSources, m_dataSources);
+                }
+                return;
+            }
 
             // Re-populate rendering resources when the asset or GPU sorting algorithm changes.
             m_prevValidDataSources = m_validDataSources;
@@ -441,34 +495,40 @@ namespace Miris.Runtime
                 }
 
                 // Expand bounds to encapsulate all data sources.
-                using (s_updateBoundsMarker.Auto())
+                UpdateBounds(m_validDataSources, m_dataSources);
+            }
+        }
+
+        // Aggregate bounds over the given data sources, then derive the object- and world-space
+        // bounds from them.
+        private void UpdateBounds(GaussianSplatDataSource[] objectSources, GaussianSplatDataSource[] worldSources)
+        {
+            using (s_updateBoundsMarker.Auto())
+            {
+                // compute an aggregate bounds by getting the min/max of the dataSource
+                // bounds min/max vectors. this appears to be faster than repeatedly 
+                // expanding the bounds using Bounds.Encapsulate(Bounds) for each source
+                Vector3 minBound = Vector3.positiveInfinity;
+                Vector3 maxBound = Vector3.negativeInfinity;
+                foreach (var dataSource in objectSources)
                 {
-                    // compute an aggregate bounds by getting the min/max of the dataSource
-                    // bounds min/max vectors. this appears to be faster than repeatedly 
-                    // expanding the bounds using Bounds.Encapsulate(Bounds) for each source
-                    Vector3 minBound = Vector3.positiveInfinity;
-                    Vector3 maxBound = Vector3.negativeInfinity;
-                    foreach (var dataSource in m_validDataSources)
-                    {
-                        Bounds dataSourceBounds = dataSource.GetObjectBounds();
-                        minBound = Vector3.Min(minBound, dataSourceBounds.min);
-                        maxBound = Vector3.Max(maxBound, dataSourceBounds.max);
-                    }
-                    m_dataSourceBounds.SetMinMax(minBound, maxBound);
-
-                    Vector3 minWorldBound = Vector3.positiveInfinity;
-                    Vector3 maxWorldBound = Vector3.negativeInfinity;
-                    foreach (var dataSource in m_dataSources)
-                    {
-                        Bounds dataSourceBounds = dataSource.GetObjectBounds();
-                        minWorldBound = Vector3.Min(minBound, dataSourceBounds.min);
-                        maxWorldBound = Vector3.Max(maxBound, dataSourceBounds.max);
-                    }
-                    m_dataWorldBounds.SetMinMax(minWorldBound, maxWorldBound);
-
-                    CalculateObjectAndWorldBounds();
+                    Bounds dataSourceBounds = dataSource.GetObjectBounds();
+                    minBound = Vector3.Min(minBound, dataSourceBounds.min);
+                    maxBound = Vector3.Max(maxBound, dataSourceBounds.max);
                 }
-                
+                m_dataSourceBounds.SetMinMax(minBound, maxBound);
+
+                Vector3 minWorldBound = Vector3.positiveInfinity;
+                Vector3 maxWorldBound = Vector3.negativeInfinity;
+                foreach (var dataSource in worldSources)
+                {
+                    Bounds dataSourceBounds = dataSource.GetObjectBounds();
+                    minWorldBound = Vector3.Min(minWorldBound, dataSourceBounds.min);
+                    maxWorldBound = Vector3.Max(maxWorldBound, dataSourceBounds.max);
+                }
+                m_dataWorldBounds.SetMinMax(minWorldBound, maxWorldBound);
+
+                CalculateObjectAndWorldBounds();
             }
         }
 
@@ -476,10 +536,14 @@ namespace Miris.Runtime
         // Rendering execution
         // ---------------------------------------------------------
 
-        // Can this component render splats?
+        // Can this component render splats? Both halves matter: the renderer is constructed before
+        // its buffers are allocated, and UpdateResources allocates nothing at all while the data
+        // sources carry no splats - which is every frame between a model root appearing and its
+        // splat data arriving. Answering "yes" in that window put a renderer with null buffers into
+        // the render system's active list, and every buffer it touched was a NullReferenceException.
         public bool CanRender()
         {
-            return (m_gsRenderer != null);
+            return m_gsRenderer != null && m_gsRenderer.HasResources;
         }
 
         public void Render(Camera camera, CommandBuffer commandBuffer)
@@ -554,15 +618,7 @@ namespace Miris.Runtime
 
         private float4 MapLodIndexToColor(int lodIndex)
         {
-            float lodIndexNormalized = 0.0f;
-
-            int minMaxDifference = m_lodHeatMapMaxLodIndex - m_lodHeatMapMinLodIndex;
-            if (minMaxDifference > 0)
-            {
-                lodIndexNormalized = (lodIndex - m_lodHeatMapMinLodIndex) / (float)minMaxDifference;
-            }
-
-            return ColorUtils.HueToRgba(1.0f - lodIndexNormalized);
+            return ColorUtils.LodIndexToRgba(lodIndex, m_lodHeatMapMinLodIndex, m_lodHeatMapMaxLodIndex);
         }
     }
 }
