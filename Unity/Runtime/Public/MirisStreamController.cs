@@ -5,7 +5,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using System.IO;
 
 // Unity engine
@@ -23,27 +22,41 @@ namespace Miris.Runtime
     [ExecuteInEditMode]
     public class MirisStreamController : MonoBehaviour
     {
+        /// <summary>
+        /// Which renderer draws this controller's splats.
+        /// </summary>
+        public enum RenderBackend
+        {
+            /// <summary>Unity compute shaders, via MirisAssetRenderSystem.</summary>
+            Unity,
+
+            /// <summary>
+            /// The native Shark rasterizer, via SharkSplatRenderSystem.
+            /// Anywhere else the controller logs and falls back to <see cref="Unity"/>.
+            /// </summary>
+            Native,
+        }
+
         [NonSerialized]
         public bool m_loadedMetadata = false;
 
-        public enum ExecutionMode
+        internal enum ExecutionMode
         {
             Asynchronous = 0,
             Synchronous
         }
-        [SerializeField]
-        public ExecutionMode m_executionMode = ExecutionMode.Asynchronous;
+        internal ExecutionMode m_executionMode = ExecutionMode.Asynchronous;
         private SceneMetadata m_sceneMetadata;
 
-        [SerializeField]
-        public RuntimeSettings m_runtimeSettings = new RuntimeSettings
+        internal RuntimeSettings m_runtimeSettings = new RuntimeSettings
         {
             m_targetFramesPerSecond = 72.0f,
-            
+
             m_splatCountBudget = 400000,
             m_congestionMinInflightBytes = 256 * 1024,
             m_congestionMaxInflightBytes = 128 * 1024 * 1024,
             m_budgetSplitMode = 1,
+            m_xrModeActive = false,
         };
         // Client instance and API helpers
         private Client m_client;
@@ -60,10 +73,10 @@ namespace Miris.Runtime
         private Dictionary<MirisStream, HashSet<int>> m_streamToModelRootObjectIds = new();
 
         // Tracks all the splat data sources that belong to an asset root object
-        private Dictionary<int, List<GaussianSplatDataSource>> m_modelRootObjectIdToDataSources = new();
+        private Dictionary<int, List<MirisAssetDataSource>> m_modelRootObjectIdToDataSources = new();
 
-        // Associates each GaussianSplat scene object ID to its data source. 
-        private Dictionary<int, GaussianSplatDataSource> m_splatObjectIdToDataSource = new Dictionary<int, GaussianSplatDataSource>();
+        // Associates each MirisAsset scene object ID to its data source. 
+        private Dictionary<int, MirisAssetDataSource> m_splatObjectIdToDataSource = new Dictionary<int, MirisAssetDataSource>();
 
         // Miris Stream(s) already have their own GameObject, so we don't need to create
         // them in Populate().  m_streamObjectIds is used for a quick look-up to skip GameObject
@@ -75,10 +88,7 @@ namespace Miris.Runtime
             s_profilerPrefix + "Sync Scene"
         );
 
-        [SerializeField]
-        [Range(0.0f, 2.0f)]
-        [Tooltip("Amount of time to fully fade in / out a particular tile.  Set this to 0 to disable the fade effect.")]
-        public float m_fadeDurationSeconds = 0.3f;
+        internal float m_fadeDurationSeconds = 0.3f;
 
         // Tracks the coroutines responsible for transitioning LODs.
         private Dictionary<int, Coroutine> m_fadeCoroutines = new();
@@ -86,13 +96,53 @@ namespace Miris.Runtime
         // Lazily update the renderable objects only when data source's active state changes.
         private bool m_updateRenderableObjects = false;
 
-        private ClientConfig m_clientConfig;
+        internal ClientConfig m_clientConfig;
 
-        public bool fadeLargeSplats
+        [SerializeField]
+        [Tooltip("Asset viewer key used by the AssetManager. Use SetViewerKey() to change it at runtime; an empty/whitespace value falls back to the key configured in ClientConfig.")]
+        private string m_viewerKey = "";
+
+        /// <summary>
+        /// Current viewer key in effect. Use <see cref="SetViewerKey"/> to change it — assigning
+        /// a field directly would leave the AssetManager out of sync.
+        /// </summary>
+        public string ViewerKey => m_viewerKey;
+
+        [SerializeField]
+        [Tooltip("Which renderer draws this controller's splats.")]
+        private RenderBackend m_renderBackend = RenderBackend.Unity;
+
+        /// <summary>
+        /// The renderer currently drawing this controller's splats.
+        /// </summary>
+        public RenderBackend Backend => m_renderBackend;
+
+        // Shark drives the splats it renders straight from this controller's client, so the SDK's
+        // own renderer must be off for those streams - see MirisStream.RenderedExternally.
+        private bool IsSharkActive => m_renderBackend == RenderBackend.Native && !IsEditMode;
+
+        /// <summary>
+        /// Raised whenever the effective viewer key changes (Initialize(), SetViewerKey(), or an
+        /// Inspector edit via OnValidate). Lets other packages (e.g. app_kit) observe and react —
+        /// e.g. to keep dev UI or persisted preferences in sync — without MirisStreamController
+        /// needing to know they exist.
+        /// </summary>
+        public event Action<string> ViewerKeyChanged;
+
+        /// <summary>
+        /// Raised from inside SyncScene's SceneChangeTracker scope, so an alternative renderer can
+        /// consume the same changes without calling the destructive GetSceneChanges drain itself.
+        ///
+        /// Handlers run with the scene lock held and must consume the Changes synchronously -
+        /// SyncScene frees them on return, so the struct must not be retained.
+        /// </summary>
+        public event Action<SceneChangeTracker.Changes> SceneChangesDrained;
+
+        internal bool fadeLargeSplats
         {
             get
             {
-                foreach (GaussianSplatRenderComponent renderComponent in GetRenderComponents())
+                foreach (MirisAssetRenderComponent renderComponent in GetRenderComponents())
                 {
                     return renderComponent.m_fadeLargeSplats;
                 }
@@ -102,7 +152,7 @@ namespace Miris.Runtime
 
             set
             {
-                foreach (GaussianSplatRenderComponent renderComponent in GetRenderComponents())
+                foreach (MirisAssetRenderComponent renderComponent in GetRenderComponents())
                 {
                     renderComponent.m_fadeLargeSplats = value;
                 }
@@ -117,9 +167,9 @@ namespace Miris.Runtime
         // Public API
         // --------------------------------------------------------------------
 
-        public List<GaussianSplatRenderComponent> GetRenderComponents()
+        public List<MirisAssetRenderComponent> GetRenderComponents()
         {
-            List<GaussianSplatRenderComponent> renderComponents = m_streamToSceneObjectId.Keys
+            List<MirisAssetRenderComponent> renderComponents = m_streamToSceneObjectId.Keys
                 .SelectMany(stream => stream.GetRenderComponents())
                 .ToList();
 
@@ -138,6 +188,45 @@ namespace Miris.Runtime
             return m_assetManager;
         }
 
+        /// <summary>
+        /// Chooses the renderer.  Switching needs every loaded stream
+        /// torn down and re-added to reach the other renderer.
+        /// </summary>
+        public void SetRenderBackend(RenderBackend backend)
+        {
+            if (m_client != null && backend != m_renderBackend)
+            {
+                Debug.LogError($"{nameof(MirisStreamController)}: the render backend cannot be changed "
+                               + "once the client exists - set it before enabling this controller");
+                return;
+            }
+            m_renderBackend = backend;
+        }
+
+        /// <summary>
+        /// The MirisStreams this controller has loaded. Grows as streams register, so callers
+        /// should not cache it.
+        /// </summary>
+        internal IEnumerable<MirisStream> Streams => m_streamToSceneObjectId.Keys;
+
+        /// <summary>
+        /// Whether a MirisStream may add its asset yet.
+        ///
+        /// Under Shark this is false until native confirms it has adopted the client.
+        /// </summary>
+        internal bool IsReadyForStreams()
+        {
+            if (m_client == null)
+            {
+                return false;
+            }
+            if (!IsSharkActive)
+            {
+                return true;
+            }
+            return SharkSplatRenderSystem.m_instance.IsAdopted;
+        }
+
         // --------------------------------------------------------------------
         // Non-scene data synchronization
         // --------------------------------------------------------------------
@@ -147,6 +236,7 @@ namespace Miris.Runtime
             // Report the true wall-clock frame delta for budget control (unscaled: timeScale must
             // not affect render-loop timing). Runs in LateUpdate before SyncScene's UpdateExecution.
             m_client.RecordFrameTime(Time.unscaledDeltaTime * 1000.0);
+            m_runtimeSettings.m_xrModeActive = XRUtils.IsXR();
             m_client.SetRuntimeSettings(m_runtimeSettings);
         }
 
@@ -159,6 +249,10 @@ namespace Miris.Runtime
             // Update flags.
             m_updateRenderableObjects = true;
             m_loadedMetadata = false;
+
+            // Before the scene object exists, so the render components Populate creates are built
+            // suppressed rather than registering with the SDK renderer and being unregistered again.
+            stream.RenderedExternally = IsSharkActive;
 
             SceneObject streamObject = m_scene.AddStream(stream.name, url, doNotRefine: IsEditMode);
 
@@ -183,6 +277,9 @@ namespace Miris.Runtime
             // Update flags.
             m_updateRenderableObjects = true;
             m_loadedMetadata = false;
+
+            // See AddStream: set before the render components exist, not after.
+            stream.RenderedExternally = IsSharkActive;
 
             SceneObject streamObject = m_scene.AddStreamById(stream.name, uuid, doNotRefine: IsEditMode);
 
@@ -287,13 +384,17 @@ namespace Miris.Runtime
                     SetObjectsDirty(changes.m_changeIds.modifiedObjectIds, changes.m_changeIds.modifiedObjectFlags);
 
                     HashSet<int> createdObjectIdsSet = new HashSet<int>();
-                    foreach(var createdId in changes.m_changeIds.createdObjectIds)
+                    foreach (var createdId in changes.m_changeIds.createdObjectIds)
                     {
                         createdObjectIdsSet.Add(createdId);
                     }
 
                     SetObjectsActiveState(changes.m_changeIds.activatedObjectIds, changes.m_changeIds.deactivatedObjectIds, createdObjectIdsSet);
+                    RemoveDeletedObjects(changes.m_changeIds.deletedObjectIds);
                     UpdateRenderableObjects();
+                    // After this controller's own bookkeeping, while the lock is still held and
+                    // before the arrays are freed. See SceneChangesDrained.
+                    SceneChangesDrained?.Invoke(changes);
                     changes.m_changeIds.Free();
                 }
             }
@@ -324,8 +425,9 @@ namespace Miris.Runtime
             Matrix4x4 assetMatrix = sceneObject.GetTransform();
 
             MirisStream stream = m_streamObjectIdToMirisStream.First(kv => m_scene.GetSceneObject(kv.Key).IsAncestorOf(sceneObjectId)).Value;
-            GaussianSplatRenderComponent renderComponent = stream.GetRenderComponent(sceneObjectId);
-            if(renderComponent != null){
+            MirisAssetRenderComponent renderComponent = stream.GetRenderComponent(sceneObjectId);
+            if (renderComponent != null)
+            {
                 SceneObject spawnOffsetObject = m_scene.GetSceneObject(sceneObject.GetParentId());
                 Matrix4x4 spawnOffsetMatrix = spawnOffsetObject.GetTransform();
                 if (assetMatrix.ValidTRS() && spawnOffsetMatrix.ValidTRS())
@@ -340,14 +442,14 @@ namespace Miris.Runtime
         // --------------------------------------------------------------------
         // Control temporary stall of render culling
         // -------------------------------------------------------------------- 
-        public void ToggleRenderComponentCulling()
+        internal void ToggleRenderComponentCulling()
         {
-            List<GaussianSplatRenderComponent> renderComponents = GetRenderComponents();
-            foreach (GaussianSplatRenderComponent renderComponent in renderComponents)
+            List<MirisAssetRenderComponent> renderComponents = GetRenderComponents();
+            foreach (MirisAssetRenderComponent renderComponent in renderComponents)
             {
                 renderComponent.ToggleCulling();
             }
-        }  
+        }
 
         // --------------------------------------------------------------------
         // Scene object population
@@ -382,7 +484,7 @@ namespace Miris.Runtime
                 // Splat data is handled by creating a data source and associating it with the relevant MirisStream that contains it
                 else if (sceneObjectType == SceneObjectType.GaussianSplats)
                 {
-                    GaussianSplatDataSource data = new();
+                    MirisAssetDataSource data = new();
                     data.m_opacity = 0.0f;
                     data.m_object = sceneObject;
                     m_splatObjectIdToDataSource.Add(sceneObjectId, data);
@@ -410,17 +512,52 @@ namespace Miris.Runtime
                 SceneObjectType sceneObjectType = m_scene.GetSceneObject(modifiedObjectId).GetSceneObjectType();
                 SceneObjectModifyFlagState changeFlags;
                 changeFlags.m_flags = (SceneObjectModifyFlag)modifiedObjectFlags[modifiedIndex];
-                if(changeFlags.HasFlag(SceneObjectModifyFlag.ARRAYS)){
-                    if(sceneObjectType == SceneObjectType.GaussianSplats)
+                if (changeFlags.HasFlag(SceneObjectModifyFlag.ARRAYS))
+                {
+                    if (sceneObjectType == SceneObjectType.GaussianSplats)
                     {
-                        GaussianSplatDataSource data = m_splatObjectIdToDataSource[modifiedObjectId];
+                        MirisAssetDataSource data = m_splatObjectIdToDataSource[modifiedObjectId];
                         data.m_dirty = true;
                     }
-                    
+
                 }
-                if(changeFlags.HasFlag(SceneObjectModifyFlag.TRANSFORM)){
+                if (changeFlags.HasFlag(SceneObjectModifyFlag.TRANSFORM))
+                {
                     UpdateRenderComponentTransform(modifiedObjectId);
                 }
+            }
+        }
+
+        // --------------------------------------------------------------------
+        // Scene object deletion propagation
+        // --------------------------------------------------------------------
+        private void RemoveDeletedObjects(Span<int> deletedObjectIds)
+        {
+            foreach (int sceneObjectId in deletedObjectIds)
+            {
+                if (!m_splatObjectIdToDataSource.TryGetValue(sceneObjectId, out MirisAssetDataSource dataSource))
+                {
+                    continue;
+                }
+
+                m_splatObjectIdToDataSource.Remove(sceneObjectId);
+
+                // Drop it from whichever model root's renderable list currently holds it, so the
+                // renderer stops being handed a data source whose native scene object is gone.
+                foreach (var dataSources in m_modelRootObjectIdToDataSources.Values)
+                {
+                    if (dataSources.Remove(dataSource))
+                    {
+                        break;
+                    }
+                }
+
+                // We have no safe way to resolve the owning stream for an id whose native scene
+                // object no longer exists, so just stop tracking the coroutine handle. If the fade
+                // is still running it completes harmlessly against the now-orphaned data source.
+                m_fadeCoroutines.Remove(sceneObjectId);
+
+                m_updateRenderableObjects = true;
             }
         }
 
@@ -436,7 +573,7 @@ namespace Miris.Runtime
                 {
                     MirisStream stream = m_streamObjectIdToMirisStream.First(kv => m_scene.GetSceneObject(kv.Key).IsAncestorOf(sceneObjectId)).Value;
                     StopFade(sceneObjectId, stream);
-                    GaussianSplatDataSource dataSource = m_splatObjectIdToDataSource[sceneObjectId];
+                    MirisAssetDataSource dataSource = m_splatObjectIdToDataSource[sceneObjectId];
                     m_fadeCoroutines[sceneObjectId] = stream.StartCoroutine(FadeIn(dataSource));
                 }
             }
@@ -444,15 +581,15 @@ namespace Miris.Runtime
             foreach (int sceneObjectId in deactivatedObjectIds)
             {
                 SceneObjectType sceneObjectType = m_scene.GetSceneObject(sceneObjectId).GetSceneObjectType();
-                if(sceneObjectType == SceneObjectType.GaussianSplats)
+                if (sceneObjectType == SceneObjectType.GaussianSplats)
                 {
-                    GaussianSplatDataSource dataSource = m_splatObjectIdToDataSource[sceneObjectId];
+                    MirisAssetDataSource dataSource = m_splatObjectIdToDataSource[sceneObjectId];
                     if (createdObjectIdsSet.Contains(sceneObjectId))
                     {
                         // If it was a newly created object that is starting out disabled, simply set its active state without fade out.
                         dataSource.m_active = false;
                         m_updateRenderableObjects = true;
-                    } 
+                    }
                     else
                     {
                         // Otherwise, start the fade out
@@ -462,6 +599,39 @@ namespace Miris.Runtime
                     }
                 }
             }
+        }
+
+        /// Widest span of per-object LOD depths across every live data source. Leaves the range
+        /// untouched when nothing is loaded yet, so the caller keeps whatever it started with.
+        private void GetLodIndexRangeFromDataSources(ref int minLodIndex, ref int maxLodIndex)
+        {
+            int lowest = int.MaxValue;
+            int highest = int.MinValue;
+
+            foreach (List<MirisAssetDataSource> dataSources in m_modelRootObjectIdToDataSources.Values)
+            {
+                foreach (MirisAssetDataSource dataSource in dataSources)
+                {
+                    if (dataSource == null || !dataSource.IsValid())
+                    {
+                        continue;
+                    }
+
+                    int lodIndex = dataSource.GetLodIndex();
+                    lowest = Math.Min(lowest, lodIndex);
+                    highest = Math.Max(highest, lodIndex);
+                }
+            }
+
+            if (lowest > highest)
+            {
+                minLodIndex = MirisAssetRenderComponent.DefaultLodHeatMapMinLodIndex;
+                maxLodIndex = MirisAssetRenderComponent.DefaultLodHeatMapMaxLodIndex;
+                return;
+            }
+
+            minLodIndex = lowest;
+            maxLodIndex = highest;
         }
 
         // --------------------------------------------------------------------
@@ -475,6 +645,10 @@ namespace Miris.Runtime
             }
 
             m_scene.GetLodMinMaxIndices(out int minLodIndex, out int maxLodIndex);
+            if (minLodIndex == maxLodIndex)
+            {
+                GetLodIndexRangeFromDataSources(ref minLodIndex, ref maxLodIndex);
+            }
 
             // Update the data sources of each render component.
             foreach (var pair in m_streamToModelRootObjectIds)
@@ -483,10 +657,10 @@ namespace Miris.Runtime
                 HashSet<int> modelRootIds = pair.Value;
                 foreach (int modelRootId in modelRootIds)
                 {
-                    
+
                     Debug.Assert(m_modelRootObjectIdToDataSources.ContainsKey(modelRootId));
-                    GaussianSplatRenderComponent renderComponent = stream.GetRenderComponent(modelRootId);
-                
+                    MirisAssetRenderComponent renderComponent = stream.GetRenderComponent(modelRootId);
+
                     var dataSources = m_modelRootObjectIdToDataSources[modelRootId];
                     if (dataSources.Count <= 0)
                     {
@@ -501,8 +675,8 @@ namespace Miris.Runtime
 
             m_updateRenderableObjects = false;
         }
-        
-        private IEnumerator FadeIn(GaussianSplatDataSource dataSource)
+
+        private IEnumerator FadeIn(MirisAssetDataSource dataSource)
         {
             float fadeDuration = m_fadeDurationSeconds;
             dataSource.m_active = true;
@@ -524,7 +698,7 @@ namespace Miris.Runtime
             }
         }
 
-        private IEnumerator FadeOut(GaussianSplatDataSource dataSource)
+        private IEnumerator FadeOut(MirisAssetDataSource dataSource)
         {
             float fadeDuration = m_fadeDurationSeconds;
             dataSource.m_active = true;
@@ -585,14 +759,55 @@ namespace Miris.Runtime
             // Initialize client config.
             m_clientConfig = ClientConfig.Load();
 
-            // Seed the viewer key for the default ENV from config resource; it may be dynamically changed thereafter
-            string viewerKey = m_clientConfig.GetAssetViewerKey();
-            if (viewerKey != null)
-            {
-                m_assetManager.SetViewerKey(viewerKey);
-            }
+            // Seed with precedence: an existing value already on this component (e.g. saved into
+            // the scene/prefab via the Inspector) wins; otherwise fall back to ClientConfig's default.
+            SetViewerKey(m_viewerKey);
 
             PreparePersistentDataDir(m_client);
+
+            // Refused when another controller already holds Shark's single context.
+            if (IsSharkActive
+                && !SharkSplatRenderSystem.m_instance.Activate(this))
+            {
+                m_renderBackend = RenderBackend.Unity;
+            }
+        }
+
+        private void ApplyViewerKey()
+        {
+            if (m_assetManager == null)
+            {
+                return;
+            }
+
+            m_assetManager.SetViewerKey(m_viewerKey);
+            ViewerKeyChanged?.Invoke(m_viewerKey);
+        }
+
+        /// <summary>
+        /// Normalizes a requested viewer key: trims surrounding whitespace, and falls back to
+        /// whatever ClientConfig provides by default if the result is empty (e.g. null, "", or
+        /// whitespace-only). This is how a caller "clears" an override back to the default.
+        /// </summary>
+        private string NormalizeViewerKey(string viewerKey)
+        {
+            string trimmed = viewerKey?.Trim();
+            if (!string.IsNullOrEmpty(trimmed))
+            {
+                return trimmed;
+            }
+
+            return m_clientConfig != null ? m_clientConfig.GetAssetViewerKey() : "";
+        }
+
+        /// <summary>
+        /// Changes the viewer key at runtime and pushes it to the AssetManager immediately. Pass
+        /// null, empty, or whitespace to reset back to the default key configured in ClientConfig.
+        /// </summary>
+        public void SetViewerKey(string viewerKey)
+        {
+            m_viewerKey = NormalizeViewerKey(viewerKey);
+            ApplyViewerKey();
         }
 
         static private void PreparePersistentDataDir(Client client)
@@ -608,19 +823,28 @@ namespace Miris.Runtime
 
         private void Teardown()
         {
+            // Before the streams and the client go: Shark holds a handler on SceneChangesDrained and
+            // a native context built around this client, and it un-suppresses the streams on the way
+            // out so they are not left invisible to both renderers.
+            SharkSplatRenderSystem.m_instance.Deactivate();
+
             // Normal cleanup path for non-quit scenarios (e.g., scene changes, disabling in editor)
             MirisStream[] streams = m_streamToSceneObjectId.Keys.ToArray();
             foreach (MirisStream stream in streams)
             {
                 RemoveStream(stream);
+                stream.ForceUnload();
             }
 
             m_streamToSceneObjectId.Clear();
+            m_splatObjectIdToDataSource.Clear();
+            m_fadeCoroutines.Clear();
             m_clientConfig = null;
 
             m_scene?.Clear();
 
             // Teardown API objects
+            m_assetManager?.Dispose();
             m_assetManager = null;
             m_scene = null;
             m_sceneMetadata?.Dispose();
@@ -645,6 +869,15 @@ namespace Miris.Runtime
             Teardown();
         }
 
+        protected void OnValidate()
+        {
+            // Normalize Inspector edits to m_viewerKey (trim, or fall back to ClientConfig's
+            // default if cleared) and push the result straight to the AssetManager, if it already
+            // exists (e.g. edits made in edit mode or while in Play mode).
+            m_viewerKey = NormalizeViewerKey(m_viewerKey);
+            ApplyViewerKey();
+        }
+
         protected void Start()
         {
             // Initialize client & scene state
@@ -654,8 +887,28 @@ namespace Miris.Runtime
 
         protected void LateUpdate()
         {
+            TickRenderBackend();
             SyncClientParameters();
             SyncScene();
+        }
+
+        // Shark cannot come up until the camera and, in XR, the compositor's drawable exist, so it
+        // is brought up here rather than in Initialize.
+        private void TickRenderBackend()
+        {
+            if (!IsSharkActive)
+            {
+                return;
+            }
+
+            SharkSplatRenderSystem.m_instance.Tick();
+            if (SharkSplatRenderSystem.m_instance.Failed)
+            {
+                Debug.LogError($"{nameof(MirisStreamController)}: Shark could not be brought up - falling "
+                               + $"back to {nameof(RenderBackend.Unity)}");
+                SharkSplatRenderSystem.m_instance.Deactivate();
+                m_renderBackend = RenderBackend.Unity;
+            }
         }
     }
 }
