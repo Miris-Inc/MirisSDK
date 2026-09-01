@@ -215,5 +215,18 @@ namespace Miris.Editor
             string buildPath = Path.Combine(bc.BaseBuildPath, "build-output", "apps", "linux", bc.ProjectName);
             BuildPipeline.BuildPlayer(bc.Scenes.ToArray(), buildPath, BuildTarget.StandaloneLinux64, BuildOptions.None);
         }
+
+        static void VisionOSBuild()
+        {
+            BuildContext bc = new BuildContext();
+            if (!bc.IsValid())
+            {
+                return;
+            }
+
+            ApplyPlatformDefines(BuildTarget.VisionOS);
+            string buildPath = Path.Combine(bc.BaseBuildPath, "build-output", "apps", "visionos", bc.ProjectName);
+            BuildPipeline.BuildPlayer(bc.Scenes.ToArray(), buildPath, BuildTarget.VisionOS, BuildOptions.None);
+        }
     }
 }
