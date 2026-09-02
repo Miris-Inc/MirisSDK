@@ -13,13 +13,248 @@
 namespace Miris.Runtime {
 
 public class MirisBindings {
-  public static SWIGTYPE_p_aqua__AquaStatus GetSceneMetadata(global::System.IntPtr client, SceneMetadata metadata) {
-    SWIGTYPE_p_aqua__AquaStatus ret = new SWIGTYPE_p_aqua__AquaStatus(MirisBindingsPINVOKE.GetSceneMetadata(client, SceneMetadata.getCPtr(metadata)), true);
+  public static uint GetSizeOfDataForCompressionType(CompressionType compressionType) {
+    uint ret = MirisBindingsPINVOKE.GetSizeOfDataForCompressionType((int)compressionType);
     return ret;
   }
 
-  public static SWIGTYPE_p_aqua__AquaStatus GetMetadata(global::System.IntPtr client, int sceneObjectId, AssetMetadata metadata) {
-    SWIGTYPE_p_aqua__AquaStatus ret = new SWIGTYPE_p_aqua__AquaStatus(MirisBindingsPINVOKE.GetMetadata(client, sceneObjectId, AssetMetadata.getCPtr(metadata)), true);
+  public static global::System.IntPtr CreateClient() {
+    global::System.IntPtr ret = MirisBindingsPINVOKE.CreateClient();
+    return ret;
+  }
+
+  public static AquaStatus DestroyClient(global::System.IntPtr client) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.DestroyClient(client);
+    return ret;
+  }
+
+  public static AquaStatus SetClientSpatialFormat(global::System.IntPtr client, SpatialFormat spatialFormat) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.SetClientSpatialFormat(client, SpatialFormat.getCPtr(spatialFormat));
+    if (MirisBindingsPINVOKE.SWIGPendingException.Pending) throw MirisBindingsPINVOKE.SWIGPendingException.Retrieve();
+    return ret;
+  }
+
+  public static AquaStatus SetAssetViewerKey(global::System.IntPtr client, string key) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.SetAssetViewerKey(client, key);
+    return ret;
+  }
+
+  public static ulong PrefetchContent(global::System.IntPtr client, string url) {
+    ulong ret = MirisBindingsPINVOKE.PrefetchContent(client, url);
+    return ret;
+  }
+
+  public static AquaStatus ClearScene(global::System.IntPtr client) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.ClearScene(client);
+    return ret;
+  }
+
+  public static AquaStatus UpdateSceneExecution(global::System.IntPtr client) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.UpdateSceneExecution(client);
+    return ret;
+  }
+
+  public static AquaStatus RecordFrameTime(global::System.IntPtr client, double frameTimeMs) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.RecordFrameTime(client, frameTimeMs);
+    return ret;
+  }
+
+  public static bool TakeRenderRequired(global::System.IntPtr client) {
+    bool ret = MirisBindingsPINVOKE.TakeRenderRequired(client);
+    return ret;
+  }
+
+  public static AquaStatus WaitForSceneExecution(global::System.IntPtr client) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.WaitForSceneExecution(client);
+    return ret;
+  }
+
+  public static AquaStatus CancelAllSceneExecution(global::System.IntPtr client) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.CancelAllSceneExecution(client);
+    return ret;
+  }
+
+  public static int AddStreamById(global::System.IntPtr client, string streamName, string uuid, bool doNotRefine) {
+    int ret = MirisBindingsPINVOKE.AddStreamById(client, streamName, uuid, doNotRefine);
+    return ret;
+  }
+
+  public static bool RemoveStream(global::System.IntPtr client, int streamObjectId) {
+    bool ret = MirisBindingsPINVOKE.RemoveStream(client, streamObjectId);
+    return ret;
+  }
+
+  public static AquaStatus SetMainCameraTransform(global::System.IntPtr client, float[] cameraTransform) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.SetMainCameraTransform(client, cameraTransform);
+    return ret;
+  }
+
+  public static AquaStatus SetMainCameraViewFrustum(global::System.IntPtr client, float aspectRatio, float verticalFov, float nearPlane, float farPlane, int viewportHeightPixels) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.SetMainCameraViewFrustum(client, aspectRatio, verticalFov, nearPlane, farPlane, viewportHeightPixels);
+    return ret;
+  }
+
+  public static AquaStatus SetSceneObjectTransform(global::System.IntPtr client, int sceneObjectId, float[] transform) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.SetSceneObjectTransform(client, sceneObjectId, transform);
+    return ret;
+  }
+
+  public static bool LockScene(global::System.IntPtr client) {
+    bool ret = MirisBindingsPINVOKE.LockScene(client);
+    return ret;
+  }
+
+  public static AquaStatus UnlockScene(global::System.IntPtr client) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.UnlockScene(client);
+    return ret;
+  }
+
+  public static AquaStatus GetSceneChangesCounts(global::System.IntPtr client, ref global::Miris.Runtime.SceneChangeIds sceneChangeIds) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.GetSceneChangesCounts(client, ref sceneChangeIds);
+    return ret;
+  }
+
+  public static AquaStatus GetSceneChanges(global::System.IntPtr client, ref global::Miris.Runtime.SceneChangeIds sceneChangeIds) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.GetSceneChanges(client, ref sceneChangeIds);
+    return ret;
+  }
+
+  public static AquaStatus GetSceneMetadata(global::System.IntPtr client, SceneMetadata metadata) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.GetSceneMetadata(client, SceneMetadata.getCPtr(metadata));
+    return ret;
+  }
+
+  public static int GetSceneRootObjectId(global::System.IntPtr client) {
+    int ret = MirisBindingsPINVOKE.GetSceneRootObjectId(client);
+    return ret;
+  }
+
+  public static int GetSceneObjectParent(global::System.IntPtr client, int sceneObjectId) {
+    int ret = MirisBindingsPINVOKE.GetSceneObjectParent(client, sceneObjectId);
+    return ret;
+  }
+
+  public static bool IsSceneObjectAncestorOf(global::System.IntPtr client, int sceneObjectId, int descendantObjectId) {
+    bool ret = MirisBindingsPINVOKE.IsSceneObjectAncestorOf(client, sceneObjectId, descendantObjectId);
+    return ret;
+  }
+
+  public static int GetSceneObjectType(global::System.IntPtr client, int sceneObjectId) {
+    int ret = MirisBindingsPINVOKE.GetSceneObjectType(client, sceneObjectId);
+    return ret;
+  }
+
+  public static global::System.IntPtr GetSceneObjectName(global::System.IntPtr client, int sceneObjectId) {
+    global::System.IntPtr ret = MirisBindingsPINVOKE.GetSceneObjectName(client, sceneObjectId);
+    return ret;
+  }
+
+  public static AquaStatus GetLocalBoundingBox(global::System.IntPtr client, int sceneObjectId, float[] boxData) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.GetLocalBoundingBox(client, sceneObjectId, boxData);
+    return ret;
+  }
+
+  public static AquaStatus GetWorldBoundingBox(global::System.IntPtr client, int sceneObjectId, float[] boxData) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.GetWorldBoundingBox(client, sceneObjectId, boxData);
+    return ret;
+  }
+
+  public static AquaStatus MirisGetLocalTransform(global::System.IntPtr client, int sceneObjectId, float[] transform) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.MirisGetLocalTransform(client, sceneObjectId, transform);
+    return ret;
+  }
+
+  public static int GetAttributeCount(global::System.IntPtr client, int sceneObjectId) {
+    int ret = MirisBindingsPINVOKE.GetAttributeCount(client, sceneObjectId);
+    return ret;
+  }
+
+  public static bool HasAttribute(global::System.IntPtr client, int sceneObjectId, string attributeName) {
+    bool ret = MirisBindingsPINVOKE.HasAttribute(client, sceneObjectId, attributeName);
+    return ret;
+  }
+
+  public static AquaStatus GetAttribute(global::System.IntPtr client, int sceneObjectId, string attributeName, ref global::Miris.Runtime.AttributeInfo attributeInfo) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.GetAttribute(client, sceneObjectId, attributeName, ref attributeInfo);
+    return ret;
+  }
+
+  public static int AddStream(global::System.IntPtr client, string streamName, string contentUrl, bool doNotRefine) {
+    int ret = MirisBindingsPINVOKE.AddStream(client, streamName, contentUrl, doNotRefine);
+    return ret;
+  }
+
+  public static AquaStatus GetLodMinMaxIndices(global::System.IntPtr client, out int minLodIndex, out int maxLodIndex) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.GetLodMinMaxIndices(client, out minLodIndex, out maxLodIndex);
+    return ret;
+  }
+
+  public static int GetLodIndex(global::System.IntPtr client, int sceneObjectId) {
+    int ret = MirisBindingsPINVOKE.GetLodIndex(client, sceneObjectId);
+    return ret;
+  }
+
+  public static int GetSceneOperatorCount(global::System.IntPtr client) {
+    int ret = MirisBindingsPINVOKE.GetSceneOperatorCount(client);
+    return ret;
+  }
+
+  public static AquaStatus SetRuntimeSettings(global::System.IntPtr client, ref global::Miris.Runtime.RuntimeSettings runtimeSettings) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.SetRuntimeSettings(client, ref runtimeSettings);
+    return ret;
+  }
+
+  public static bool SetPersistentDataDirectory(global::System.IntPtr client, string dirPath) {
+    bool ret = MirisBindingsPINVOKE.SetPersistentDataDirectory(client, dirPath);
+    return ret;
+  }
+
+  public static int GetCameraCount(global::System.IntPtr client) {
+    int ret = MirisBindingsPINVOKE.GetCameraCount(client);
+    return ret;
+  }
+
+  public static AquaStatus GetCameraIds(global::System.IntPtr client, int[] cameraIndices) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.GetCameraIds(client, cameraIndices);
+    return ret;
+  }
+
+  public static AquaStatus GetMetadata(global::System.IntPtr client, int sceneObjectId, AssetMetadata metadata) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.GetMetadata(client, sceneObjectId, AssetMetadata.getCPtr(metadata));
+    return ret;
+  }
+
+  public static AquaStatus PrintSceneObjectHierarchy(global::System.IntPtr client, int sceneObjectId) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.PrintSceneObjectHierarchy(client, sceneObjectId);
+    return ret;
+  }
+
+  public static AssetInfoVector GetAssets(global::System.IntPtr client, StringVector tags, int limit) {
+    AssetInfoVector ret = new AssetInfoVector(MirisBindingsPINVOKE.GetAssets(client, StringVector.getCPtr(tags), limit), true);
+    if (MirisBindingsPINVOKE.SWIGPendingException.Pending) throw MirisBindingsPINVOKE.SWIGPendingException.Retrieve();
+    return ret;
+  }
+
+  public static AssetInfoResult GetAssetsPaginatedBlocking(global::System.IntPtr client, StringVector tags, int limit, string cursor, PageDirection direction) {
+    AssetInfoResult ret = new AssetInfoResult(MirisBindingsPINVOKE.GetAssetsPaginatedBlocking__SWIG_0(client, StringVector.getCPtr(tags), limit, cursor, (int)direction), true);
+    if (MirisBindingsPINVOKE.SWIGPendingException.Pending) throw MirisBindingsPINVOKE.SWIGPendingException.Retrieve();
+    return ret;
+  }
+
+  public static AssetInfoResult GetAssetsPaginatedBlocking(global::System.IntPtr client, StringVector tags, int limit, string cursor) {
+    AssetInfoResult ret = new AssetInfoResult(MirisBindingsPINVOKE.GetAssetsPaginatedBlocking__SWIG_1(client, StringVector.getCPtr(tags), limit, cursor), true);
+    if (MirisBindingsPINVOKE.SWIGPendingException.Pending) throw MirisBindingsPINVOKE.SWIGPendingException.Retrieve();
+    return ret;
+  }
+
+  public static AssetInfoResult GetAssetsPaginatedBlocking(global::System.IntPtr client, StringVector tags, int limit) {
+    AssetInfoResult ret = new AssetInfoResult(MirisBindingsPINVOKE.GetAssetsPaginatedBlocking__SWIG_2(client, StringVector.getCPtr(tags), limit), true);
+    if (MirisBindingsPINVOKE.SWIGPendingException.Pending) throw MirisBindingsPINVOKE.SWIGPendingException.Retrieve();
+    return ret;
+  }
+
+  public static StringVector GetAvailableTags(global::System.IntPtr client) {
+    StringVector ret = new StringVector(MirisBindingsPINVOKE.GetAvailableTags(client), true);
     return ret;
   }
 
