@@ -20,7 +20,7 @@ namespace Miris.Runtime
     /// It provides a method of rendering that is useful for debugging and inspecting raw splat data.
     /// </summary>
 
-    public class PointRenderer : GaussianSplatRenderer
+    public class PointRenderer : MirisAssetRenderer
     {
         // ---------------------------------------------------------
         // Rendering Flags
@@ -122,7 +122,7 @@ namespace Miris.Runtime
         // Symbol names used in the shaders.
         private static class ShaderIds
         {
-            public static readonly int GaussianSplatRT = Shader.PropertyToID("_GaussianSplatRT");
+            public static readonly int MirisAssetRT = Shader.PropertyToID("_MirisAssetRT");
 
             public static readonly int VecScreenParamsID = Shader.PropertyToID("_VecScreenParams");
             public static readonly int VecProjectionParamsID = Shader.PropertyToID("_VecProjectionParams");
@@ -176,12 +176,12 @@ namespace Miris.Runtime
         // Resource management
         // ---------------------------------------------------------
 
-        protected override void UpdateGraphicsResources(GaussianSplatDataSource[] dataSources)
+        protected override void UpdateGraphicsResources(MirisAssetDataSource[] dataSources)
         {
             base.UpdateGraphicsResources(dataSources);
         }
 
-        protected override void UpdateComputeResources(GaussianSplatDataSource[] dataSources)
+        protected override void UpdateComputeResources(MirisAssetDataSource[] dataSources)
         {
             base.UpdateComputeResources(dataSources);
 
@@ -390,7 +390,7 @@ namespace Miris.Runtime
             // blit the result from the texture onto the temp RT
             // TODO modify this so it will work in single-pass rendering 
             //   since direct Blits are not supported.
-            commandBuffer.Blit(m_renderTexture, ShaderIds.GaussianSplatRT);
+            commandBuffer.Blit(m_renderTexture, ShaderIds.MirisAssetRT);
 
             commandBuffer.EndSample(s_pointRenderGpuMarker);
                 
