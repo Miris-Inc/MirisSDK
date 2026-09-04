@@ -33,9 +33,22 @@ namespace Miris.Runtime
         public GPUResourceTracker(UInt64 bufferSize = 64UL * 1024 * 1024 * 10)
         {
             m_bufferSize = bufferSize;
+#if MIRIS_VISIONOS_SIMULATOR
+            // The simulator caps a Metal buffer at 256MB against this 640MB default, and an
+            // oversized GraphicsBuffer throws from its constructor every frame, so nothing is
+            // ever drawn. Growing the atlas is handled by adding further buffers, so a smaller
+            // first one costs residency, not correctness. Simulator-only: the device allocates
+            // the full size, and clamping there would cost splat residency for nothing.
+            m_bufferSize = Math.Min(bufferSize, (UInt64)SystemInfo.maxGraphicsBufferSize);
+            if (m_bufferSize < bufferSize)
+            {
+                Debug.Log($"GPUResourceTracker: atlas buffer clamped to {m_bufferSize} bytes, "
+                          + $"the simulator maximum, from the requested {bufferSize}");
+            }
+#endif
             m_atlasBuffers.Add(new GpuArray((int)m_bufferSize, 0, 0, "atlasBuffer"));
             m_atlasAllocators.Add(new LinearAllocator(m_bufferSize));
-            m_stats.SetCacheSize((int)bufferSize); 
+            m_stats.SetCacheSize((int)m_bufferSize);
         }
 
         public class AtlasIndexEntry
