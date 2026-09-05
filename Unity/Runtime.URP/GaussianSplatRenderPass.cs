@@ -105,7 +105,9 @@ namespace Miris.Runtime
 
                     using (GaussianSplatRenderSystem.s_compositeMarker.Auto()) {
                         commandBuffer.BeginSample(GaussianSplatRenderSystem.s_compositeMarker);
-                        commandBuffer.DrawProcedural(Matrix4x4.identity, matComposite, 0, MeshTopology.Triangles, 6, m_xrUtils.IsSinglePassXR()?2:1);                        
+                        // One instance, even for single-pass instanced stereo: Unity supplies the
+                        // second instance for the second eye.
+                        commandBuffer.DrawProcedural(Matrix4x4.identity, matComposite, 0, MeshTopology.Triangles, 6, 1);                        
                         commandBuffer.EndSample(GaussianSplatRenderSystem.s_compositeMarker); 
                     } 
                 }
