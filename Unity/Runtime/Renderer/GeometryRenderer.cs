@@ -35,9 +35,9 @@ namespace Miris.Runtime
     ///
     /// </summary>
 
-    public class GeometryRenderer : GaussianSplatRenderer
+    public class GeometryRenderer : MirisAssetRenderer
     {
-        // Shader pass IDs (Must match RenderGaussianSplats.shader)
+        // Shader pass IDs (Must match RenderMirisAssets.shader)
         public enum ShaderPassId : int
         {
             Beauty = 0,
@@ -125,7 +125,7 @@ namespace Miris.Runtime
 
         private int m_dataSourceMinLodIndex = 0;
         private int m_dataSourceMaxLodIndex = 0;
-        public float m_nearClipThreshold = 0.25f;
+        public float m_nearClipThreshold = 0.01f;
         private float4 m_objectIdColor;
 
         // ---------------------------------------------------------
@@ -225,6 +225,7 @@ namespace Miris.Runtime
             public static readonly int AlphaCullingThreshold = Shader.PropertyToID("_AlphaCullingThreshold");
             public static readonly int NearClipThreshold = Shader.PropertyToID("_NearClipThreshold");
             public static readonly int FadeLargeSplats = Shader.PropertyToID("_FadeLargeSplats");
+            public static readonly int BlurAmount = Shader.PropertyToID("_BlurAmount");
 
             public static readonly int EyeData = Shader.PropertyToID("_EyeData");
             public static readonly int BaseOffset = Shader.PropertyToID("_BaseOffset");
@@ -233,7 +234,7 @@ namespace Miris.Runtime
 
             public static readonly int CameraPosition = Shader.PropertyToID("_CameraPosition");
 
-            public static readonly int GaussianSplatRT = Shader.PropertyToID("_GaussianSplatRT");
+            public static readonly int MirisAssetRT = Shader.PropertyToID("_MirisAssetRT");
         }
 
         // ---------------------------------------------------------
@@ -275,11 +276,11 @@ namespace Miris.Runtime
         {
             if (m_shader == null)
             {
-                m_shader = (Shader)Resources.Load("Shaders/RenderGaussianSplats");
+                m_shader = (Shader)Resources.Load("Shaders/RenderMirisAssets");
                 Assert.IsNotNull(m_shader, "Default shader look-up should not fail.");
             }
 
-            m_material = new Material(m_shader) { name = "GaussianSplatsMaterial" };
+            m_material = new Material(m_shader) { name = "MirisAssetsMaterial" };
 
             // We explicitly call ComputeShader.Instantiate on each of the ComputeShaders below
             // so that we can emulate the effect of Local shader keywords.  
@@ -293,7 +294,7 @@ namespace Miris.Runtime
             m_depthKernel = m_depthComputeShader.FindKernel("CalculateDepth");
 
             // Get handle for 3DGS compute kernel
-            m_map3DGSShader = ComputeShader.Instantiate((ComputeShader)Resources.Load("Shaders/GaussianSplatMapKernel"));
+            m_map3DGSShader = ComputeShader.Instantiate((ComputeShader)Resources.Load("Shaders/MirisAssetMapKernel"));
             m_map3DGSKernel = m_map3DGSShader.FindKernel("GaussianMapping");
 
             // Set indices to draw a quad in Triangles mode.
@@ -313,7 +314,7 @@ namespace Miris.Runtime
         // Resource management
         // ---------------------------------------------------------
 
-        protected override void UpdateGraphicsResources(GaussianSplatDataSource[] dataSources)
+        protected override void UpdateGraphicsResources(MirisAssetDataSource[] dataSources)
         {
             base.UpdateGraphicsResources(dataSources);
 
@@ -336,9 +337,9 @@ namespace Miris.Runtime
             m_lastUpdateFrame = Time.frameCount;
         }
 
-        protected override void UpdateComputeResources(GaussianSplatDataSource[] dataSources)
+        protected override void UpdateComputeResources(MirisAssetDataSource[] dataSources)
         {
-            // See EnableShaderKeywords comment in GaussianSplatsRenderer.CreateGraphicsResources
+            // See EnableShaderKeywords comment in MirisAssetRenderer.CreateGraphicsResources
             EnableShaderKeywords(dataSources[0], m_depthComputeShader);
             EnableShaderKeywords(dataSources[0], m_map3DGSShader);
 
@@ -539,7 +540,7 @@ namespace Miris.Runtime
                 m_renderBuffers.m_gpuPositionBounds?.SetBufferOnMaterial(m_material);
                 m_material.SetBuffer(ShaderIds.SplatToDataSourceIndex, m_gpuSplatToDataSourceIndex);
                 m_material.SetFloat(ShaderIds.GaussianSigmaThreshold, m_gaussianSigmaThreshold);
-                m_material.SetFloat(ShaderIds.AlphaCullingThreshold, m_alphaCullingThreshold);
+                m_material.SetFloat(ShaderIds.AlphaCullingThreshold, m_alphaCullingThreshold * m_assetOpacityScale);
                 m_material.SetFloat(ShaderIds.NearClipThreshold, m_nearClipThreshold);
                 m_material.SetFloat(ShaderIds.FadeLargeSplats, m_fadeLargeSplats ? 1.0f : 0.0f);
 
@@ -729,6 +730,9 @@ namespace Miris.Runtime
             commandBuffer.SetComputeIntParam(m_map3DGSShader, ShaderIds.SHOnly, shOnly ? 1 : 0);
             commandBuffer.SetComputeIntParam(m_map3DGSShader, ShaderIds.SHCount, m_shCount);
             
+            // Blur amount for anti-aliasing compensation (matches Spork's blurAmount default)
+            commandBuffer.SetComputeFloatParam(m_map3DGSShader, ShaderIds.BlurAmount, 0.3f);
+
             var (threadGroupCountX, _, _) = ComputeKernelUtils.CalculateThreadGroupCount(m_map3DGSShader,
                 m_map3DGSKernel, splatsToMapCount);
             commandBuffer.DispatchCompute(m_map3DGSShader, m_map3DGSKernel, threadGroupCountX, 1, 1);
