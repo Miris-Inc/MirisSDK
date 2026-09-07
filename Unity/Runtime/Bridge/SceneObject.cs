@@ -81,9 +81,18 @@ namespace Miris.Runtime
             return attributeInfo;
         }
 
-        unsafe public Bounds GetBoundingBox()
+        unsafe public Bounds GetLocalBoundingBox()
         {
-            m_client.GetBoundingBox(m_sceneObjectId, m_boundsData);
+            m_client.GetLocalBoundingBox(m_sceneObjectId, m_boundsData);
+            return new Bounds(
+                new Vector3(m_boundsData[0], m_boundsData[1], m_boundsData[2]),
+                new Vector3(m_boundsData[3], m_boundsData[4], m_boundsData[5])
+            );
+        }
+
+        unsafe public Bounds GetWorldBoundingBox()
+        {
+            m_client.GetWorldBoundingBox(m_sceneObjectId, m_boundsData);
             return new Bounds(
                 new Vector3(m_boundsData[0], m_boundsData[1], m_boundsData[2]),
                 new Vector3(m_boundsData[3], m_boundsData[4], m_boundsData[5])
@@ -93,6 +102,18 @@ namespace Miris.Runtime
         unsafe public Matrix4x4 GetTransform()
         {
             m_client.GetTransform(m_sceneObjectId, m_matrixData);
+
+            return new Matrix4x4(
+                new Vector4(m_matrixData[0], m_matrixData[1], m_matrixData[2], m_matrixData[3]),
+                new Vector4(m_matrixData[4], m_matrixData[5], m_matrixData[6], m_matrixData[7]),
+                new Vector4(m_matrixData[8], m_matrixData[9], m_matrixData[10], m_matrixData[11]),
+                new Vector4(m_matrixData[12], m_matrixData[13], m_matrixData[14], m_matrixData[15])
+            );
+        }
+
+        unsafe public Matrix4x4 GetTransformRelativeToAncestor(int ancestorSceneObjectId)
+        {
+            m_client.GetTransformRelativeToAncestor(m_sceneObjectId, ancestorSceneObjectId, m_matrixData);
 
             return new Matrix4x4(
                 new Vector4(m_matrixData[0], m_matrixData[1], m_matrixData[2], m_matrixData[3]),

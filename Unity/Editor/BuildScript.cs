@@ -16,6 +16,10 @@ namespace Miris.Editor
 {
     public class BuildScript
     {
+        // Set only for the duration of a visionOS simulator build. Runtime code uses it to work
+        // around limits the simulator has and the device does not - see GPUResourceTracker.
+        const string SimulatorDefine = "MIRIS_VISIONOS_SIMULATOR";
+
         /// <summary>
         /// Applies platform-specific preprocessor defines from AQUA_PLATFORM_DEFINES env var.
         /// Called before each build to ensure correct defines are set.
@@ -214,6 +218,61 @@ namespace Miris.Editor
             ApplyPlatformDefines(BuildTarget.StandaloneLinux64);
             string buildPath = Path.Combine(bc.BaseBuildPath, "build-output", "apps", "linux", bc.ProjectName);
             BuildPipeline.BuildPlayer(bc.Scenes.ToArray(), buildPath, BuildTarget.StandaloneLinux64, BuildOptions.None);
+        }
+
+        static void VisionOSBuild()
+        {
+            BuildContext bc = new BuildContext();
+            if (!bc.IsValid())
+            {
+                return;
+            }
+
+            ApplyPlatformDefines(BuildTarget.VisionOS);
+            // Set rather than assumed: a simulator build that dies before its finally runs leaves
+            // sdkVersion on Simulator, and inheriting that silently produces a device build Xcode
+            // will not offer a real headset for.
+            PlayerSettings.VisionOS.sdkVersion = VisionOSSdkVersion.Device;
+            string buildPath = Path.Combine(bc.BaseBuildPath, "build-output", "apps", "visionos", bc.ProjectName);
+            BuildPipeline.BuildPlayer(bc.Scenes.ToArray(), buildPath, BuildTarget.VisionOS, BuildOptions.None);
+        }
+
+        static void VisionOSSimulatorBuild()
+        {
+            BuildContext bc = new BuildContext();
+            if (!bc.IsValid())
+            {
+                return;
+            }
+
+            // Both of these are restored in the finally. VisionOSBuild sets neither, so anything
+            // left behind by a failed build silently changes the next device build - a stale
+            // sdkVersion would make it a simulator build, and a stale MIRIS_VISIONOS_SIMULATOR
+            // would compile the simulator's GPU workarounds into a device player.
+            VisionOSSdkVersion oldSdkVersion = PlayerSettings.VisionOS.sdkVersion;
+            try
+            {
+                // Before the defines are captured, since it adds to them: what is restored below
+                // is then exactly what a device build would also leave behind.
+                ApplyPlatformDefines(BuildTarget.VisionOS);
+                string defines = PlayerSettings.GetScriptingDefineSymbols(NamedBuildTarget.VisionOS);
+                try
+                {
+                    PlayerSettings.SetScriptingDefineSymbols(NamedBuildTarget.VisionOS,
+                                                             $"{defines};{SimulatorDefine}");
+                    PlayerSettings.VisionOS.sdkVersion = VisionOSSdkVersion.Simulator;
+                    string buildPath = Path.Combine(bc.BaseBuildPath, "build-output", "apps", "visionos-simulator", bc.ProjectName);
+                    BuildPipeline.BuildPlayer(bc.Scenes.ToArray(), buildPath, BuildTarget.VisionOS, BuildOptions.None);
+                }
+                finally
+                {
+                    PlayerSettings.SetScriptingDefineSymbols(NamedBuildTarget.VisionOS, defines);
+                }
+            }
+            finally
+            {
+                PlayerSettings.VisionOS.sdkVersion = oldSdkVersion;
+            }
         }
     }
 }
