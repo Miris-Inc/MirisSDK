@@ -52,12 +52,12 @@ For deployments targeting specific devices, the minimum system requirements are 
 
 5. Settings changes
 
-    * If your project is on URP (Universal Render Pipeline), then you will need to add the Gaussian Splat Render Pass component.  If not, skip to step 6.
+    * If your project is on URP (Universal Render Pipeline), then you will need to add the Miris Asset Render Pass component.  If not, skip to step 6.
 
-    * In your Assets folder, find the Settings folder. In there you will need to update the Renderer assets to add a component/render feature: `Gaussian Splat Render Pass`
+    * In your Assets folder, find the Settings folder. In there you will need to update the Renderer assets to add a component/render feature: `Miris Asset Render Pass`
     ![](img/update_renderer.png)
 
-    **Windows and Linux**: Our gaussian splat renderer requires certain shader intrinsics that may or may not be available with your project's Graphics API.  For the smoothest rendering experience, we recommend using the Vulkan API.
+    **Windows and Linux**: Our renderer requires certain shader intrinsics that may or may not be available with your project's Graphics API.  For the smoothest rendering experience, we recommend using the Vulkan API.
 
     * Go to `Edit` -> `Project Settings` -> `Player` -> `Other Settings` -> `Rendering`.
     * If `Auto Graphics API` for your platform is enabled, disable it.
