@@ -81,9 +81,18 @@ namespace Miris.Runtime
             return attributeInfo;
         }
 
-        unsafe public Bounds GetBoundingBox()
+        unsafe public Bounds GetLocalBoundingBox()
         {
-            m_client.GetBoundingBox(m_sceneObjectId, m_boundsData);
+            m_client.GetLocalBoundingBox(m_sceneObjectId, m_boundsData);
+            return new Bounds(
+                new Vector3(m_boundsData[0], m_boundsData[1], m_boundsData[2]),
+                new Vector3(m_boundsData[3], m_boundsData[4], m_boundsData[5])
+            );
+        }
+
+        unsafe public Bounds GetWorldBoundingBox()
+        {
+            m_client.GetWorldBoundingBox(m_sceneObjectId, m_boundsData);
             return new Bounds(
                 new Vector3(m_boundsData[0], m_boundsData[1], m_boundsData[2]),
                 new Vector3(m_boundsData[3], m_boundsData[4], m_boundsData[5])
