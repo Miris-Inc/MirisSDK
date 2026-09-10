@@ -1,9 +1,5 @@
 // Copyright © 2026 Miris, Inc. All rights reserved.
 
-using AOT;
-using System.Runtime.InteropServices;
-using System.Threading.Tasks;
-
 using UnityEngine;
 
 namespace Miris.Runtime
@@ -57,7 +53,9 @@ namespace Miris.Runtime
 
         public void SetMainCameraViewFrustum(Camera camera)
         {
-            m_client.SetMainCameraViewFrustum(camera.aspect, camera.fieldOfView, camera.nearClipPlane, camera.farClipPlane);
+            // pixelHeight is this camera's own target, so it is already per-eye under XR.
+            m_client.SetMainCameraViewFrustum(camera.aspect, camera.fieldOfView, camera.nearClipPlane,
+                camera.farClipPlane, camera.pixelHeight);
         }
 
         public int GetCameraCount()
@@ -68,6 +66,16 @@ namespace Miris.Runtime
         public void GetCameraIds(int[] cameraIndices)
         {
             m_client.GetCameraIds(cameraIndices);
+        }
+
+        public int GetDefaultCameraId()
+        {
+            return m_client.GetDefaultCameraId();
+        }
+
+        public int GetViewingVolumeId()
+        {
+            return m_client.GetViewingVolumeId();
         }
 
         public void Clear()
@@ -87,9 +95,7 @@ namespace Miris.Runtime
 
         public void GetLodMinMaxIndices(out int minLodIndex, out int maxLodIndex)
         {
-            minLodIndex = 0;
-            maxLodIndex = 0;
-            m_client.GetLodMinMaxIndices(ref minLodIndex, ref maxLodIndex);
+            m_client.GetLodMinMaxIndices(out minLodIndex, out maxLodIndex);
         }
 
         public void GetMetadata(SceneMetadata metadata){
