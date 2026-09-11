@@ -27,7 +27,7 @@ namespace Miris.Editor
         public static string DoNotAutoDownloadPrefsKey = "MirisStartup_DoNotAutoDownloadBinaries";
 
         private static readonly string WelcomeMessage =
-            "The Miris Unity SDK is currently in an alpha state, but feel free to look around.";
+            "Miris Unity SDK is currently in beta.";
         private static readonly string AssetKeyMessage =
             "If you have an Asset Viewer Key for use with this project (or need to replace your old one), please paste it below, and click \"Apply\"";
 
@@ -175,24 +175,19 @@ namespace Miris.Editor
                             var packageJson = JsonUtility.FromJson<PackageJson>(jsonText);
                             string latestVersion = packageJson.version;
 
-                            try
+                            if (!SdkVersion.TryParse(latestVersion, out var latest) ||
+                                !SdkVersion.TryParse(m_currentVersion, out var current))
                             {
-                                Version latest = new Version(latestVersion);
-                                Version current = new Version(m_currentVersion);
-                                if (latest.CompareTo(current) > 0)
-                                {
-                                    m_updateCheckState = UpdateCheckState.UpdateAvailable;
-                                    m_newVersion = latestVersion;
-                                }
-                                else
-                                {
-                                    m_updateCheckState = UpdateCheckState.UpToDate;
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Debug.LogError($"[Miris] Failed to parse version strings for update check: {ex}");
+                                Debug.LogError($"[Miris] Failed to parse version strings for update check: latest=\"{latestVersion}\", current=\"{m_currentVersion}\"");
                                 m_updateCheckState = UpdateCheckState.Error;
+                            }
+                            else
+                            {
+                                m_updateCheckState = latest > current
+                                    ? UpdateCheckState.UpdateAvailable
+                                    : UpdateCheckState.UpToDate;
+                                if (m_updateCheckState == UpdateCheckState.UpdateAvailable)
+                                    m_newVersion = latestVersion;
                             }
                         }
                         catch (Exception ex)
