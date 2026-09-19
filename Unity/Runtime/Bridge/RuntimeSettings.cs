@@ -1,98 +1,51 @@
 // Copyright © 2026 Miris, Inc. All rights reserved.
 
-// This is a valid C++ and C# file :)
-
-#if __cplusplus
-#define public
-#else
-#define USING_CSHARP
-#endif
-
-#if USING_CSHARP
-
 using System;
 using System.Runtime.InteropServices;
 using UnityEngine;
 
 namespace Miris.Runtime
 {
-#endif
-
-#if USING_CSHARP
+    /// <summary>
+    /// Parameters controlling streaming fidelity, passed to the native client once per
+    /// frame.
+    /// </summary>
+    /// <remarks>
+    /// Hand-written rather than SWIG-generated, and the layout must stay byte-compatible
+    /// with <c>aqua::RuntimeSettings</c> in
+    /// <c>modules/AquaScene/include/AquaScene/RuntimeSettings.h</c> -- same fields, same
+    /// order. It crosses the boundary as <c>ref RuntimeSettings</c> via the typemap in
+    /// AquaSwigBindings/AquaTypes.swg, so a mismatch corrupts memory rather than failing to
+    /// compile. <c>scripts/build/check_blittable_layout.py</c> compares the two.
+    ///
+    /// It is not generated because app_kit needs what a generated proxy cannot give:
+    /// value semantics, so MirisPlayerPreferences can snapshot and restore it and
+    /// JsonConvert can persist it; and real fields carrying <see cref="RangeAttribute"/>,
+    /// which ReflectionUtils reads to size the developer LOD sliders.
+    /// </remarks>
     [StructLayout(LayoutKind.Sequential)]
     [Serializable]
-#endif
     public struct RuntimeSettings
     {
-
         // Developer Note:
         //
-        // C# struct does not support default initializers in 9.0, nor do they support
-        // parameterless constructors, thus we have defined RuntimeSettings defaults
-        // in MirisStreamController.m_runtimeSettings.
-        //
-        // Unfortunately we need to duplicate those defaults in C++ so sane defaults are initialized
-        // for unit tests.
+        // C# structs support neither default field initializers nor a parameterless
+        // constructor, so the defaults live in MirisStreamController.m_runtimeSettings and
+        // are duplicated in the C++ constructor for unit tests.
 
-#if __cplusplus
-        RuntimeSettings() :
-            m_targetFramesPerSecond(72.0f)
-            , m_splatCountBudget(400000)
-            , m_nodeCountBudget(200)
-            , m_congestionMinInflightBytes(256 * 1024)
-            , m_congestionMaxInflightBytes(128 * 1024 * 1024)
-            , m_xrModeActive(false)
-            , m_splatCountBudgetCap(-1)
-            , m_budgetSplitMode(1)
-
-        {
-            // TODO: if we ever add more heavy-weight members (like containers), we may want to
-            // generate a hash when the data is updated, which is then used for comparison.
-        }
-
-        bool operator==(const RuntimeSettings& other) const {
-            return (
-                m_targetFramesPerSecond == other.m_targetFramesPerSecond &&
-                m_congestionMinInflightBytes == other.m_congestionMinInflightBytes &&
-                m_congestionMaxInflightBytes == other.m_congestionMaxInflightBytes &&
-                m_splatCountBudget == other.m_splatCountBudget &&
-                m_splatCountBudgetCap == other.m_splatCountBudgetCap &&
-                m_nodeCountBudget == other.m_nodeCountBudget &&
-                m_xrModeActive == other.m_xrModeActive &&
-                m_budgetSplitMode == other.m_budgetSplitMode
-            );
-        }
-
-        bool operator!=(const RuntimeSettings& other) const {
-            return !(*this == other);
-        }
-
-#endif
-
-#if USING_CSHARP
         [Range(24.0f, 120.0f)]
-#endif
         public float m_targetFramesPerSecond;
 
-
-
-#if USING_CSHARP
         [Range(1.0f, 20000000.0f)]
-#endif
         public int m_splatCountBudget;
-#if USING_CSHARP
+
         [Range(1.0f, 20000.0f)]
-#endif
         public int m_nodeCountBudget;
 
-#if USING_CSHARP
         [Range(256 * 1024, 1024 * 1024 * 100)]
-#endif
         public int m_congestionMinInflightBytes;
 
-#if USING_CSHARP
         [Range(1024 * 1024, 1024 * 1024 * 500)]
-#endif
         public int m_congestionMaxInflightBytes;
 
         // True when an immersive XR session is active
@@ -103,11 +56,5 @@ namespace Miris.Runtime
 
         // 0 = Equal, 1 = ValueWeighted (default)
         public int m_budgetSplitMode;
-
     }
-#if USING_CSHARP
 }
-#else
-;
-#undef public
-#endif
