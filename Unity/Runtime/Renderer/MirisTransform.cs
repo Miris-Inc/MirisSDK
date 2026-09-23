@@ -25,8 +25,10 @@ namespace Miris.Runtime
         public Vector3 TransformPoint(Vector3 localPos) => m_localToWorldMatrix.MultiplyPoint3x4(localPos);
 
         public Vector3 InverseTransformPoint(Vector3 worldPos) => m_worldToLocalMatrix.MultiplyPoint3x4(worldPos);
-        public Vector3 InverseTransformDirection(Vector3 worldDirNormalized) => m_worldToLocalMatrix.MultiplyVector(worldDirNormalized);
-        public Vector3 InverseTransformVector(Vector3 worldVec) => InverseTransformDirection(worldVec);
+        public Vector3 InverseTransformVector(Vector3 worldVec) => m_worldToLocalMatrix.MultiplyVector(worldVec);
+
+        public Vector3 InverseTransformDirection(Vector3 worldDirNormalized) =>
+            m_localToWorldMatrix.transpose.MultiplyVector(worldDirNormalized);
 
         static public MirisTransform operator *(MirisTransform transform, Matrix4x4 matrix)
         {
