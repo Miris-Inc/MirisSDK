@@ -215,5 +215,46 @@ namespace Miris.Editor
             string buildPath = Path.Combine(bc.BaseBuildPath, "build-output", "apps", "linux", bc.ProjectName);
             BuildPipeline.BuildPlayer(bc.Scenes.ToArray(), buildPath, BuildTarget.StandaloneLinux64, BuildOptions.None);
         }
+
+        static void VisionOSBuild()
+        {
+            BuildContext bc = new BuildContext();
+            if (!bc.IsValid())
+            {
+                return;
+            }
+
+            ApplyPlatformDefines(BuildTarget.VisionOS);
+            // Set rather than assumed: a simulator build that dies before its finally runs leaves
+            // sdkVersion on Simulator, and inheriting that silently produces a device build Xcode
+            // will not offer a real headset for.
+            PlayerSettings.VisionOS.sdkVersion = VisionOSSdkVersion.Device;
+            string buildPath = Path.Combine(bc.BaseBuildPath, "build-output", "apps", "visionos", bc.ProjectName);
+            BuildPipeline.BuildPlayer(bc.Scenes.ToArray(), buildPath, BuildTarget.VisionOS, BuildOptions.None);
+        }
+
+        static void VisionOSSimulatorBuild()
+        {
+            BuildContext bc = new BuildContext();
+            if (!bc.IsValid())
+            {
+                return;
+            }
+
+            // Restored in the finally. VisionOSBuild does not set it, so a stale value left by a
+            // failed build here would silently turn the next device build into a simulator one.
+            VisionOSSdkVersion oldSdkVersion = PlayerSettings.VisionOS.sdkVersion;
+            try
+            {
+                ApplyPlatformDefines(BuildTarget.VisionOS);
+                PlayerSettings.VisionOS.sdkVersion = VisionOSSdkVersion.Simulator;
+                string buildPath = Path.Combine(bc.BaseBuildPath, "build-output", "apps", "visionos-simulator", bc.ProjectName);
+                BuildPipeline.BuildPlayer(bc.Scenes.ToArray(), buildPath, BuildTarget.VisionOS, BuildOptions.None);
+            }
+            finally
+            {
+                PlayerSettings.VisionOS.sdkVersion = oldSdkVersion;
+            }
+        }
     }
 }
