@@ -56,6 +56,14 @@ namespace Miris.Runtime
             return true;
         }
 
+        public UInt64 UsedBytes => m_freeOffset;
+
+        public void Reset()
+        {
+            m_freeOffset = 0;
+            m_numAllocations = 0;
+        }
+
         public void DumpStats()
         {
             Int64 freeMem = (Int64)(m_size - m_freeOffset);
