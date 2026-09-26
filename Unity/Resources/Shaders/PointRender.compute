@@ -4,7 +4,7 @@
 #pragma kernel RenderPoints
 #pragma kernel RenderPointsDepth
 
-#include_with_pragmas "GaussianSplatDecoder.hlsl"
+#include_with_pragmas "MirisAssetDecoder.hlsl"
 #include "GaussianSplatting.hlsl"
 
 #define THREADS_PER_GROUP 512

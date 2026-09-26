@@ -65,6 +65,13 @@ namespace Miris.Runtime
             m_eccLut = Miris.Runtime.MirisApi.GetEccLUT();
         }
 
+        // The instantiated shader above is a clone and leaks if not disposed
+        public void Dispose()
+        {
+            UnityEngine.Object.DestroyImmediate(m_DecodeMosaicTextureToAtlasBufferShader);
+            m_DecodeMosaicTextureToAtlasBufferShader = null;
+        }
+
         public struct BufferAstcConvertCommand
         {
             public GpuTexture sourceTexture;
