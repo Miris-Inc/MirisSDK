@@ -51,8 +51,8 @@ bool MirisCullSort(uint gtidx) {
 //*****************************************************************************
 //INIT KERNEL
 //*****************************************************************************
-//Clear the global histogram, as we will be adding to it atomically
-[numthreads(1024, 1, 1)]
+//Clear the global histogram, as we will be adding to it atomically.
+[numthreads(THREADS_PER_GROUP, 1, 1)]
 void InitDeviceRadixSort(int3 id : SV_DispatchThreadID)
 {
     b_globalHist[id.x] = 0;
