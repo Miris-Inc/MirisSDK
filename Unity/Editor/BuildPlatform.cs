@@ -14,7 +14,8 @@ namespace Miris.Editor
         linux,
         osx,
         windows,
-        ios
+        ios,
+        visionos
     }
 
     static public class BuildPlatformExtensions
@@ -37,6 +38,7 @@ namespace Miris.Editor
                 BuildPlatform.android => ".so",
                 BuildPlatform.osx => ".dylib",
                 BuildPlatform.ios => ".xcframework",
+                BuildPlatform.visionos => ".xcframework",
                 BuildPlatform.windows => ".dll",
                 _ => throw new ArgumentOutOfRangeException(
                     $"{nameof(BuildPlatform)}.{buildPlatform.ToString()} is an un-supported build platform"
@@ -52,6 +54,7 @@ namespace Miris.Editor
                 BuildPlatform.android => "lib",
                 BuildPlatform.osx => "lib",
                 BuildPlatform.ios => "",
+                BuildPlatform.visionos => "",
                 BuildPlatform.windows => "",
                 _ => throw new ArgumentOutOfRangeException(
                     $"{nameof(BuildPlatform)}.{buildPlatform.ToString()} is an un-supported build platform"
@@ -67,6 +70,7 @@ namespace Miris.Editor
                 BuildPlatform.android => BuildTarget.Android,
                 BuildPlatform.osx => BuildTarget.StandaloneOSX,
                 BuildPlatform.ios => BuildTarget.iOS,
+                BuildPlatform.visionos => BuildTarget.VisionOS,
                 BuildPlatform.windows => BuildTarget.StandaloneWindows64,
                 _ => throw new ArgumentOutOfRangeException(
                     $"{nameof(BuildPlatform)}.{buildPlatform.ToString()} is an un-supported build platform"
@@ -96,6 +100,7 @@ namespace Miris.Editor
                 BuildTarget.StandaloneWindows64 => BuildPlatform.windows,
                 BuildTarget.StandaloneOSX => BuildPlatform.osx,
                 BuildTarget.iOS => BuildPlatform.ios,
+                BuildTarget.VisionOS => BuildPlatform.visionos,
                 _ => throw new ArgumentOutOfRangeException(
                     $"{nameof(BuildTarget)}.{EditorUserBuildSettings.activeBuildTarget.ToString()} is an un-supported target platform"
                 )
