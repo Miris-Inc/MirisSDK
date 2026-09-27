@@ -3,23 +3,16 @@
 using System;
 using UnityEngine;
 
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
-
 namespace Miris.Runtime
 {
     using ClientHandle = IntPtr;
+    using ContextHandle = IntPtr;
 
     /// <summary>
     /// Client API Object used by our C# code
     /// </summary>
     public class Client : IDisposable
     {
-#if UNITY_EDITOR
-        public static string DoNotWarnAgainPrefsKey = "MirisClient_DoNotWarnAgain";
-#endif
-
         private ClientHandle m_handle = System.IntPtr.Zero;
 
         /// <summary>
@@ -46,59 +39,32 @@ namespace Miris.Runtime
             };
         }
 
-        public Client()
+        /// <summary>
+        /// Create a client against the given context. The context must outlive the client
+        /// </summary>
+        public Client(Context context)
         {
             MirisDebug.Log("Creating Client");
-            try
+
+            if (context == null)
             {
-                m_handle = MirisApi.CreateClient();
-                SetClientSpatialFormat(PrepareSpatialFormat());
+                throw new ArgumentNullException(nameof(context));
             }
-            catch (DllNotFoundException ex)
+
+            ContextHandle? contextHandle = context.GetContextHandleInternal();
+            if (contextHandle == null)
             {
-                Debug.LogError($"Failed to create Client: Native library not found. {ex.Message}");
-                m_handle = System.IntPtr.Zero;
+                Debug.LogError("Failed to create Client: the Context has no native handle.");
+                return;
+            }
 
-#if UNITY_EDITOR
-                bool ignoreWarning = EditorPrefs.GetBool(DoNotWarnAgainPrefsKey, false);
-                if (ignoreWarning)
-                {
-                    return;
-                }
+            m_handle = MirisBindings.CreateClientForContext(contextHandle.Value);
 
-                int option = EditorUtility.DisplayDialogComplex(
-                    "Miris SDK - Native Library Missing", 
-                    #if MIRIS_INTERNAL
-                    "The Miris native library was not found - the Miris SDK will not function until it is installed or built.\n\n" +
-                    "Contact our DevOps team if you have trouble building the native library.\n\n" +
-                    "You can download the native library using the Miris Release Downloader.\n\n" +
-                    #else
-                    "The Miris native library was not found - the Miris SDK will not function until it is installed.\n\nYou can download the native library using the Miris Release Downloader.\n\n" +
-                    #endif
-                    "Details: " + ex.Message,
-                    "OK",
-                    "Open Release Downloader",
-                    "Do not show again");
-                
-                switch (option)
-                {
-                    // OK
-                    case 0:
-                        // Do nothing
-                        break;
-                    // "Open Release Downloader"
-                    case 1:
-                        UnityEditor.EditorApplication.ExecuteMenuItem("Tools/Miris/Platform Downloader");
-                        break;
-                    // "Do not show again"
-                    case 2:
-                        EditorPrefs.SetBool(DoNotWarnAgainPrefsKey, true);
-                        break;
-                    default:
-                        break;
-                }
-#endif
-                throw;
+            // SpatialFormat is a generated binding type, so it owns native memory and
+            // is only needed for the duration of the call.
+            using (SpatialFormat spatialFormat = PrepareSpatialFormat())
+            {
+                SetClientSpatialFormat(spatialFormat);
             }
         }
 
@@ -107,19 +73,14 @@ namespace Miris.Runtime
             if (m_handle != System.IntPtr.Zero)
             {
                 MirisDebug.Log("Destroying MirisClient");
-                MirisApi.DestroyClient(m_handle);
+                MirisBindings.DestroyClient(m_handle);
                 m_handle = System.IntPtr.Zero;
             }
         }
 
-        public void RecordFrameTime(double frameTimeMs)
-        {
-            MirisApi.RecordFrameTime(m_handle, frameTimeMs);
-        }
-
         public void SetRuntimeSettings(RuntimeSettings runtimeSettings)
         {
-            MirisApi.SetRuntimeSettings(m_handle, ref runtimeSettings);
+            MirisBindings.SetRuntimeSettings(m_handle, ref runtimeSettings);
         }
 
         /// <summary>
@@ -129,7 +90,7 @@ namespace Miris.Runtime
         /// <returns>true if the directory was deemed as writable, false otherwise</returns>
         public bool SetPersistentDataDirectory(string dirPath)
         {
-            return MirisApi.SetPersistentDataDirectory(m_handle, dirPath);
+            return MirisBindings.SetPersistentDataDirectory(m_handle, dirPath);
         }
 
         /// <summary>
@@ -139,7 +100,7 @@ namespace Miris.Runtime
         /// <param name="key">The SDK key</param>
         public void SetAssetViewerKey(string key)
         {
-            MirisApi.SetAssetViewerKey(m_handle, key);
+            MirisBindings.SetAssetViewerKey(m_handle, key);
         }
 
         /// <summary>
@@ -148,9 +109,23 @@ namespace Miris.Runtime
         /// <param name="tags">A vector of tags for filtering the assets that are retrieved.
         /// The tags are combined using the AND operator, i.e. they are exclusive filters.</param>
         /// <returns>Vector of AssetInfo structs</returns>
-        public AssetInfoVector GetAssets(StringVector tags)
+        public AssetInfoVector GetAssets(StringVector tags, int limit)
         {
-            return MirisBindings.GetAssets(m_handle, tags);
+            return MirisBindings.GetAssets(m_handle, tags, limit);
+        }
+
+        /// <summary>
+        /// Retrieve all available assets from the server environment, together with pagination cursors (blocking).
+        /// Pass the cursor from a previous AssetInfoResult (m_nextCursor/m_prevCursor) along with the matching
+        /// PageDirection to fetch the next/previous page. Leave both at their defaults for the initial request.
+        /// </summary>
+        /// <param name="tags">A vector of tags for filtering the assets that are retrieved.
+        /// The tags are combined using the AND operator, i.e. they are exclusive filters.</param>
+        /// <returns>AssetInfoResult containing the assets and the next/prev pagination cursors</returns>
+        public AssetInfoResult GetAssetsPaginatedBlocking(StringVector tags, int limit, string cursor = "",
+            PageDirection direction = PageDirection.None)
+        {
+            return MirisBindings.GetAssetsPaginatedBlocking(m_handle, tags, limit, cursor, direction);
         }
 
         /// <summary>
@@ -164,54 +139,62 @@ namespace Miris.Runtime
 
         public void PrefetchContent(string url)
         {
-            MirisApi.PrefetchContent(m_handle, url);
+            MirisBindings.PrefetchContent(m_handle, url);
         }
 
         public void ClearScene()
         {
             Debug.Assert(m_handle != IntPtr.Zero, "ClearScene: m_handle handle is invalid!");
-            MirisApi.ClearScene(m_handle);
+            MirisBindings.ClearScene(m_handle);
         }
 
         public int AddStream(string streamName, string contentUrl, bool doNotRefine)
         {
-            return MirisApi.AddStream(m_handle, streamName, contentUrl, doNotRefine);
+            return MirisBindings.AddStream(m_handle, streamName, contentUrl, doNotRefine);
         }
 
         public int AddStreamById(string streamName, string assetId, bool doNotRefine)
         {
-            return MirisApi.AddStreamById(m_handle, streamName, assetId, doNotRefine);
+            return MirisBindings.AddStreamById(m_handle, streamName, assetId, doNotRefine);
+        }
+
+        /// <summary>
+        /// Selects the shark-family encoding profiles, which only the native Shark renderer reads.
+        /// </summary>
+        public static void SetPreferSharkEncodingProfiles(bool prefer)
+        {
+            MirisBindings.SetPreferSharkEncodingProfiles(prefer);
         }
 
         public bool RemoveStream(int streamObjectId)
         {
             Debug.Assert(m_handle != IntPtr.Zero, "RemoveStream: m_handle handle is invalid!");
-            return MirisApi.RemoveStream(m_handle, streamObjectId);
+            return MirisBindings.RemoveStream(m_handle, streamObjectId);
         }
 
         public void UpdateSceneExecution()
         {
-            MirisApi.UpdateSceneExecution(m_handle);
+            MirisBindings.UpdateSceneExecution(m_handle);
         }
 
         public void WaitForSceneExecution()
         {
-            MirisApi.WaitForSceneExecution(m_handle);
+            MirisBindings.WaitForSceneExecution(m_handle);
         }
 
         public void CancelAllSceneExecution()
         {
-            MirisApi.CancelAllSceneExecution(m_handle);
+            MirisBindings.CancelAllSceneExecution(m_handle);
         }
 
         public bool LockScene()
         {
-            return MirisApi.LockScene(m_handle);
+            return MirisBindings.LockScene(m_handle);
         }
 
         public void UnlockScene()
         {
-            MirisApi.UnlockScene(m_handle);
+            MirisBindings.UnlockScene(m_handle);
         }
 
         /// <summary>
@@ -221,99 +204,115 @@ namespace Miris.Runtime
         /// <returns>True if rendering is needed, false otherwise.</returns>
         public bool TakeRenderRequired()
         {
-            return MirisApi.TakeRenderRequired(m_handle);
+            return MirisBindings.TakeRenderRequired(m_handle);
         }
 
         public Miris.Runtime.AquaStatus GetSceneChangesCounts(ref SceneChangeIds sceneChangeIds)
         {
-            return MirisApi.GetSceneChangesCounts(m_handle, ref sceneChangeIds);
+            return MirisBindings.GetSceneChangesCounts(m_handle, ref sceneChangeIds);
         }
 
         public Miris.Runtime.AquaStatus GetSceneChanges(ref SceneChangeIds sceneChangeIds)
         {
-            return MirisApi.GetSceneChanges(m_handle, ref sceneChangeIds);
+            return MirisBindings.GetSceneChanges(m_handle, ref sceneChangeIds);
         }
 
         public void SetMainCameraTransform(float[] transform)
         {
-            MirisApi.SetMainCameraTransform(m_handle, transform);
+            MirisBindings.SetMainCameraTransform(m_handle, transform);
         }
 
-        public void SetMainCameraViewFrustum(float aspectRatio, float verticalFov, float nearPlane, float farPlane)
+        public void SetMainCameraViewFrustum(float aspectRatio, float verticalFov, float nearPlane, float farPlane,
+            int viewportHeightPixels)
         {
-            MirisApi.SetMainCameraViewFrustum(m_handle, aspectRatio, verticalFov, nearPlane, farPlane);
+            MirisBindings.SetMainCameraViewFrustum(m_handle, aspectRatio, verticalFov, nearPlane, farPlane,
+                viewportHeightPixels);
         }
 
         public void SetSceneObjectTransform(int sceneObjectId, float[] transform)
         {
-            MirisApi.SetSceneObjectTransform(m_handle, sceneObjectId, transform);
+            MirisBindings.SetSceneObjectTransform(m_handle, sceneObjectId, transform);
         }
-
-        public void SetRuntimeSettings(ref RuntimeSettings runtimeSettings)
-        {
-            MirisApi.SetRuntimeSettings(m_handle, ref runtimeSettings);
-        }
-
 
         public int GetCameraCount()
         {
-            return MirisApi.GetCameraCount(m_handle);
+            return MirisBindings.GetCameraCount(m_handle);
         }
 
         public void GetCameraIds(int[] cameraIndices)
         {
-            MirisApi.GetCameraIds(m_handle, cameraIndices);
+            MirisBindings.GetCameraIds(m_handle, cameraIndices);
+        }
+
+        public int GetDefaultCameraId(int streamObjectId)
+        {
+            return MirisBindings.GetDefaultCameraId(m_handle, streamObjectId);
+        }
+
+        public int GetViewingVolumeId(int streamObjectId)
+        {
+            return MirisBindings.GetViewingVolumeId(m_handle, streamObjectId);
         }
 
         public int GetSceneRootObjectId()
         {
-            return MirisApi.GetSceneRootObjectId(m_handle);
+            return MirisBindings.GetSceneRootObjectId(m_handle);
         }
 
         public void PrintSceneObjectHierarchy(int sceneObjectId)
         {
-            MirisApi.PrintSceneObjectHierarchy(m_handle, sceneObjectId);
+            MirisBindings.PrintSceneObjectHierarchy(m_handle, sceneObjectId);
         }
 
         public int GetSceneObjectType(int sceneObjectId)
         {
             Debug.Assert(m_handle != IntPtr.Zero, "GetSceneObjectType: m_handle handle is invalid!");
-            return MirisApi.GetSceneObjectType(m_handle, sceneObjectId);
+            return MirisBindings.GetSceneObjectType(m_handle, sceneObjectId);
         }
 
         public int GetSceneObjectParent(int sceneObjectId)
         {
-            return MirisApi.GetSceneObjectParent(m_handle, sceneObjectId);
+            return MirisBindings.GetSceneObjectParent(m_handle, sceneObjectId);
         }
 
         public bool IsSceneObjectAncestorOf(int sceneObjectId, int descendantObjectId)
         {
-            return MirisApi.IsSceneObjectAncestorOf(m_handle, sceneObjectId, descendantObjectId);
+            return MirisBindings.IsSceneObjectAncestorOf(m_handle, sceneObjectId, descendantObjectId);
         }
 
         public IntPtr GetSceneObjectName(int sceneObjectId)
         {
-            return MirisApi.GetSceneObjectName(m_handle, sceneObjectId);
+            return MirisBindings.GetSceneObjectName(m_handle, sceneObjectId);
         }
 
         public int GetAttributeCount(int sceneObjectId)
         {
-            return MirisApi.GetAttributeCount(m_handle, sceneObjectId);
+            return MirisBindings.GetAttributeCount(m_handle, sceneObjectId);
         }
 
         public bool HasAttribute(int sceneObjectId, string attributeName)
         {
-            return MirisApi.HasAttribute(m_handle, sceneObjectId, attributeName);
+            return MirisBindings.HasAttribute(m_handle, sceneObjectId, attributeName);
         }
 
         public void GetAttribute(int sceneObjectId, string attributeName, ref AttributeInfo attributeInfo)
         {
-            MirisApi.GetAttribute(m_handle, sceneObjectId, attributeName, ref attributeInfo);
+            MirisBindings.GetAttribute(m_handle, sceneObjectId, attributeName, ref attributeInfo);
         }
 
         public void GetTransform(int sceneObjectId, float[] transformData)
         {
-            MirisApi.MirisGetLocalTransform(m_handle, sceneObjectId, transformData);
+            MirisBindings.MirisGetLocalTransform(m_handle, sceneObjectId, transformData);
+        }
+
+        public void GetWorldTransform(int sceneObjectId, float[] transformData)
+        {
+            MirisBindings.MirisGetWorldTransform(m_handle, sceneObjectId, transformData);
+        }
+
+        public void GetTransformRelativeToAncestor(int sceneObjectId, int ancestorSceneObjectId, float[] transformData)
+        {
+            MirisBindings.MirisGetTransformRelativeToAncestor(m_handle, sceneObjectId, ancestorSceneObjectId, transformData);
         }
 
         public void GetMetadata(int sceneObjectId, AssetMetadata metadata)
@@ -321,24 +320,29 @@ namespace Miris.Runtime
             MirisBindings.GetMetadata(m_handle, sceneObjectId, metadata);
         }
 
-        public void GetBoundingBox(int sceneObjectId, float[] boundingBox)
+        public void GetLocalBoundingBox(int sceneObjectId, float[] boundingBox)
         {
-            MirisApi.GetLocalBoundingBox(m_handle, sceneObjectId, boundingBox);
+            MirisBindings.GetLocalBoundingBox(m_handle, sceneObjectId, boundingBox);
+        }
+
+        public void GetWorldBoundingBox(int sceneObjectId, float[] boundingBox)
+        {
+             MirisBindings.GetWorldBoundingBox(m_handle, sceneObjectId, boundingBox);
         }
 
         public int GetLodIndex(int sceneObjectId)
         {
-            return MirisApi.GetLodIndex(m_handle, sceneObjectId);
+            return MirisBindings.GetLodIndex(m_handle, sceneObjectId);
         }
 
-        public void GetLodMinMaxIndices(ref int minLodIndex, ref int maxLodIndex)
+        public void GetLodMinMaxIndices(out int minLodIndex, out int maxLodIndex)
         {
-            MirisApi.GetLodMinMaxIndices(m_handle, ref minLodIndex, ref maxLodIndex);
+            MirisBindings.GetLodMinMaxIndices(m_handle, out minLodIndex, out maxLodIndex);
         }
 
         public int GetSceneOperatorCount()
         {
-            return MirisApi.GetSceneOperatorCount(m_handle);
+            return MirisBindings.GetSceneOperatorCount(m_handle);
         }
 
         public void GetSceneMetadata(SceneMetadata metadata)
@@ -347,7 +351,7 @@ namespace Miris.Runtime
         }
         public void SetClientSpatialFormat(SpatialFormat spatialFormat)
         {
-            MirisApi.SetClientSpatialFormat(m_handle, spatialFormat);
+            MirisBindings.SetClientSpatialFormat(m_handle, spatialFormat);
         }
     }
 }

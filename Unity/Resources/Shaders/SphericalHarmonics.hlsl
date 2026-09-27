@@ -34,7 +34,7 @@ float3 ComputeSH(SplatSHData splat, float3 color, float3 direction, int shOrder,
     half dirX = direction.x;
     half dirY = direction.y;
     half dirZ = direction.z;
-    
+
     // Start with the precomputed ambient color (Band 0)
     float3 lightingResult = color; // col = sh0 * SH_C0 + 0.5 is already precomputed
     lightingResult = onlySH ? 0.5 : color; // Optionally override with only the SH component

@@ -32,10 +32,26 @@ namespace Miris.Runtime
 
         public GPUResourceTracker(UInt64 bufferSize = 64UL * 1024 * 1024 * 10)
         {
-            m_bufferSize = bufferSize;
+            // Clamped to what this GPU will actually hand out, because an oversized
+            // GraphicsBuffer throws from its constructor every frame and nothing is ever drawn.
+            // A no-op wherever the limit exceeds the request - an AVP allows the full 640MB
+            // default, while the visionOS simulator caps a Metal buffer at 256MB. Growing the
+            // atlas is handled by adding further buffers, so a smaller first one costs
+            // residency, not correctness.
+            long deviceMaxBufferSize = SystemInfo.maxGraphicsBufferSize;
+            // A platform that cannot report a limit returns a negative value. Treat that as "no
+            // cap" rather than letting the cast wrap it into a huge one.
+            m_bufferSize = deviceMaxBufferSize > 0
+                ? Math.Min(bufferSize, (UInt64)deviceMaxBufferSize)
+                : bufferSize;
+            if (m_bufferSize < bufferSize)
+            {
+                Debug.Log($"GPUResourceTracker: atlas buffer clamped to {m_bufferSize} bytes, "
+                          + $"this device's maximum, from the requested {bufferSize}");
+            }
             m_atlasBuffers.Add(new GpuArray((int)m_bufferSize, 0, 0, "atlasBuffer"));
             m_atlasAllocators.Add(new LinearAllocator(m_bufferSize));
-            m_stats.SetCacheSize((int)bufferSize); 
+            m_stats.SetCacheSize((int)m_bufferSize);
         }
 
         public class AtlasIndexEntry
