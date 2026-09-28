@@ -1,9 +1,5 @@
 // Copyright © 2026 Miris, Inc. All rights reserved.
 
-using AOT;
-using System.Runtime.InteropServices;
-using System.Threading.Tasks;
-
 using UnityEngine;
 
 namespace Miris.Runtime
@@ -38,6 +34,16 @@ namespace Miris.Runtime
             return m_client.RemoveStream(streamObject.GetId());
         }
 
+        public bool SetStreamFetchMode(SceneObject streamObject, StreamFetchMode mode)
+        {
+            return m_client.SetStreamFetchMode(streamObject.GetId(), mode);
+        }
+
+        public StreamFetchMode GetStreamFetchMode(SceneObject streamObject)
+        {
+            return m_client.GetStreamFetchMode(streamObject.GetId());
+        }
+
         public SceneObject GetRootObject()
         {
             int sceneRootId = m_client.GetSceneRootObjectId();
@@ -57,7 +63,9 @@ namespace Miris.Runtime
 
         public void SetMainCameraViewFrustum(Camera camera)
         {
-            m_client.SetMainCameraViewFrustum(camera.aspect, camera.fieldOfView, camera.nearClipPlane, camera.farClipPlane);
+            // pixelHeight is this camera's own target, so it is already per-eye under XR.
+            m_client.SetMainCameraViewFrustum(camera.aspect, camera.fieldOfView, camera.nearClipPlane,
+                camera.farClipPlane, camera.pixelHeight);
         }
 
         public int GetCameraCount()
@@ -87,9 +95,7 @@ namespace Miris.Runtime
 
         public void GetLodMinMaxIndices(out int minLodIndex, out int maxLodIndex)
         {
-            minLodIndex = 0;
-            maxLodIndex = 0;
-            m_client.GetLodMinMaxIndices(ref minLodIndex, ref maxLodIndex);
+            m_client.GetLodMinMaxIndices(out minLodIndex, out maxLodIndex);
         }
 
         public void GetMetadata(SceneMetadata metadata){
