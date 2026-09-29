@@ -3,11 +3,11 @@
 #pragma kernel Calculate3DGSDepth
 #pragma kernel CalculateDepth
 
-#define THREADS_PER_GROUP 1024
+#include_with_pragmas "MirisThreadGroupSize.hlsl"
 
 #include "UnityCG.cginc"
 #include "CommonStructs.hlsl"
-#include_with_pragmas "GaussianSplatDecoder.hlsl"
+#include_with_pragmas "MirisAssetDecoder.hlsl"
 
 //Buffers
 RWStructuredBuffer<float> _SplatDepth;
