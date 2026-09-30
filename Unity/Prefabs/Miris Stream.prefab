@@ -45,4 +45,4 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_streamController: {fileID: 0}
-  m_url: 
+  m_opacity: 1
