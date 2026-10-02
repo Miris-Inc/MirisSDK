@@ -29,12 +29,22 @@ float3 ComputeSH(SplatSHData splat, float3 color, float3 direction, int shOrder,
 
     // Flip the direction vector as we are calculating light contribution
     direction *= -1;
+
+    // The coefficients are authored in Spark space; this direction arrives in Asset space, the one
+    // this client's stored positions are in. The two differ by a Z reflection, which changes the
+    // parity of the SH basis: every term with an odd power of dirZ - sh[1], sh[4], sh[6], sh[9],
+    // sh[11], sh[13] - changes sign, and the rest are invariant. Negating the direction's z is
+    // exactly equivalent to negating those six coefficients, in one place instead of six.
+    //
+    // Shark needs no equivalent: its working space is Asset for both clients, and its projection
+    // shaders already carry this flip unconditionally.
+    direction.z = -direction.z;
     
     // Extract components of the direction vector
     half dirX = direction.x;
     half dirY = direction.y;
     half dirZ = direction.z;
-    
+
     // Start with the precomputed ambient color (Band 0)
     float3 lightingResult = color; // col = sh0 * SH_C0 + 0.5 is already precomputed
     lightingResult = onlySH ? 0.5 : color; // Optionally override with only the SH component
