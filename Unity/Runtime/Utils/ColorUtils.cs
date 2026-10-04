@@ -21,5 +21,18 @@ namespace Miris.Runtime
                 1.0f
             );
         }
+
+        static public float4 LodIndexToRgba(int lodIndex, int minLodIndex, int maxLodIndex)
+        {
+            float lodIndexNormalized = 0.0f;
+
+            int lodIndexCount = maxLodIndex - minLodIndex + 1;
+            if (lodIndexCount > 1)
+            {
+                lodIndexNormalized = (lodIndex - minLodIndex) / (float)lodIndexCount;
+            }
+
+            return HueToRgba(1.0f - Mathf.Clamp01(lodIndexNormalized));
+        }
     }
 }
