@@ -275,7 +275,7 @@ namespace Miris.Runtime
             return m_totalBytes;
         }
 
-        // See GaussianSplatRenderer and GaussianSplatDecoder.hlsl for how this shader keyword is consumed.
+        // See MirisAssetRenderer and MirisAssetDecoder.hlsl for how this shader keyword is consumed.
         public string GetShaderKeyword()
         {
             return GenerateShaderKeyword(m_semantic, m_encoding);
