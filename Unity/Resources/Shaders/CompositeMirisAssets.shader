@@ -1,0 +1,30 @@
+// Copyright © 2024 Miris. All rights reserved.
+
+Shader "Miris/Composite Gaussian Splats"
+{
+    Properties
+    {
+        // See MirisStreamController.OutputOpacity.
+        _OutputOpacity ("Output opacity", Float) = 1
+    }
+
+    SubShader
+    {
+        Pass
+        {
+            ZWrite Off
+            ZTest Always
+            Cull Off
+            Blend SrcAlpha OneMinusSrcAlpha
+
+            HLSLPROGRAM
+
+            #pragma multi_compile __ DEBUG_TOTAL_OPACITY
+            #pragma shader_feature_local USING_URP
+
+            #include_with_pragmas "CompositeMirisAssets.hlsl"
+            
+            ENDHLSL
+        }
+    }
+}
