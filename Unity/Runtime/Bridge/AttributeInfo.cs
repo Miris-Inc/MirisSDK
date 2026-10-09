@@ -52,7 +52,7 @@ namespace Miris.Runtime
         public float w;
     };
 
-    // For transporting an AttributeArray (in C++) over to AttributeBuffer (C#)
+    // For transporting an AttributeArray (in C++) over to C#
 #if USING_CSHARP
     [StructLayout(LayoutKind.Sequential)]
 #endif
