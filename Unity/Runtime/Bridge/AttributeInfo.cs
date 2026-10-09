@@ -18,28 +18,6 @@ namespace Miris.Runtime
 
 
 
-#if USING_CSHARP
-    [StructLayout(LayoutKind.Sequential)]
-#endif
-    unsafe public struct MosaicDescriptorInfo
-    {
-        public int m_mosaicTileWidth;
-        public int m_mosaicTileHeight;
-        public int m_mosaicTileX;
-        public int m_mosaicTileY;
-        public int m_interleaveType;
-        public int m_offset;
-        public int m_stride;
-        public int m_eccPart;
-        public float m_min;
-        public float m_max;
-        public int m_isShColor;
-        public int m_textureWidth;
-        public int m_textureHeight;
-        public void* m_externalNativeHandle;
-        public int m_isRangeNormalized;
-    };
-
     // Vector4 struct compatible with both C++ and C#
 #if USING_CSHARP
     [StructLayout(LayoutKind.Sequential)]
@@ -52,7 +30,7 @@ namespace Miris.Runtime
         public float w;
     };
 
-    // For transporting an AttributeArray (in C++) over to AttributeBuffer (C#)
+    // For transporting an AttributeArray (in C++) over to C#
 #if USING_CSHARP
     [StructLayout(LayoutKind.Sequential)]
 #endif
@@ -67,8 +45,6 @@ namespace Miris.Runtime
         public int m_textureWidth;
         public int m_textureHeight;
         public int m_splatCount;
-        public void* m_mosaicDescriptors;
-        public int m_mosaicDescriptorCount;
         public int m_blockDim;
         public int m_hash0;
         public int m_hash1;
