@@ -7,23 +7,21 @@ Welcome to the Miris Unity Integration for spatial streaming.
 ## Requirements
 
 <!--END_MDX_STRIP-->
-Your Unity project must be using Unity 6000.0.58f2 or newer.
+Your Unity project must be using Unity 6000.0.58f2 or newer, with the built-in render pipeline.
+
+Splats currently render on Apple platforms only. On other platforms, and in URP projects, the `Miris Stream Controller` logs an error and renders nothing.
 
 For desktop hosts, the system requirements are below:
 
 | OS      | Requirements                                                 |
 | ------- | ------------------------------------------------------------ |
-| Windows | Windows 11                                                   |
-| Linux   | Ubuntu 22.04 LTS<br/>Support for other flavors of Linux, and other versions of Ubuntu, are not guaranteed |
 | macOS   | macOS 15.0                                                   |
 
 For deployments targeting specific devices, the minimum system requirements are below:
 
 | Device     | Requirements                                           |
 | ---------- | ------------------------------------------------------ |
-| Android    | API level 32<br />Only arm64-v8a devices are supported |
 | iOS/iPadOS | iOS/iPadOS 18.2                                        |
-| Meta Quest | Only the Meta Quest 3 and Meta Quest 3S are supported  |
 
 ## Installation
 
@@ -42,7 +40,7 @@ For deployments targeting specific devices, the minimum system requirements are 
 
     * If the `Assets/Plugins/Miris` folder already contains the libraries, you can skip to step 5.
     ![](img/release_not_found.png)
-    * If the folder does _not_ contain the libraries, or you see a pop-up like the above, you must follow the below instructions in step 5.
+    * If the folder does _not_ contain the libraries, or you see a pop-up like the above, you must follow the below instructions in step 4.
 
 4. Miris Platform Downloader Editor Tool
     * In the Unity Editor window, in the toolbar, select Tools -> Miris -> Platform Downloader
@@ -50,30 +48,37 @@ For deployments targeting specific devices, the minimum system requirements are 
 
     * If you've been directed to download a specific release, change the Tag field. Otherwise, simply click the Install button.
 
-5. Settings changes
-
-    * If your project is on URP (Universal Render Pipeline), then you will need to add the Gaussian Splat Render Pass component.  If not, skip to step 6.
-
-    * In your Assets folder, find the Settings folder. In there you will need to update the Renderer assets to add a component/render feature: `Gaussian Splat Render Pass`
-    ![](img/update_renderer.png)
-
-    **Windows and Linux**: Our gaussian splat renderer requires certain shader intrinsics that may or may not be available with your project's Graphics API.  For the smoothest rendering experience, we recommend using the Vulkan API.
-
-    * Go to `Edit` -> `Project Settings` -> `Player` -> `Other Settings` -> `Rendering`.
-    * If `Auto Graphics API` for your platform is enabled, disable it.
-    * Look for the `Graphics API` item. Ensure that `Vulkan` is the only entry present by using the `-` button to remove entries and the `+` button to add the `Vulkan` entry, if not already present.
-
-6. Prefab setup
+5. Prefab setup
 
     * Drop the Miris Stream and `Miris Stream Controller` prefab into your scene.
     ![Prefab Setup](img/prefab_setup.png)
     * On the `Miris Stream` prefab, enter the ID for the asset you want to stream. This ID will have been supplied to you by our asset upload service, and is of the form `aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee`.
 
-7. Stream!
+6. Stream!
 
     * If everything is set up successfully, the streaming content will be visible in the editor window without being in play mode. 
     * You can also press play to start streaming.
     ![](img/success.png)
+
+## Upgrading
+
+### 0.1.0
+
+`MirisStream.Status` has been removed. `MirisStream.GetStatus()` now returns `StreamStatus` (`Unknown`, `Resolving`, `Loading`, `Ready`, `Failed`), which reports the native stream's progress as of the controller's last scene sync. Replace checks against the old enum as follows:
+
+| Before | After |
+| ------ | ----- |
+| `MirisStream.Status.Rendered`, to wait for data to arrive | `GetStatus() == StreamStatus.Ready` |
+| `MirisStream.Status.Rendered`, to check the stream is drawing | `IsRendered()` (`false` while `Opacity` is 0) |
+| `MirisStream.Status.Streaming` | `GetStatus()` is `Resolving` or `Loading` |
+| `MirisStream.Status.NotLoaded` | `!IsLoaded()` |
+| `MirisStream.Status.Disabled` | `!isActiveAndEnabled` |
+| `MirisStream.Status.NoAssetId` | `string.IsNullOrEmpty(m_assetId)` |
+| `MirisStream.Status.NoController` | `m_streamController == null` |
+| `MirisStream.Status.ControllerInactive` | `!m_streamController.IsActive()` |
+| `MirisStream.Status.NoData` | No equivalent |
+
+`StreamStatus.Failed` is new: the stream could not be resolved or loaded.
 
 <!--MDX_STRIP-->
 ### Notes
