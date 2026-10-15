@@ -73,13 +73,13 @@ float3 map3DGSCovarianceTo2DPlane(float3 splat3DCenter, float3x3 cov3d, float4x4
     // This will match the Jacobian equations found in the EWA Splatting paper -- see eq 34
     float t[3] = {splatCenterInViewSpace.x, splatCenterInViewSpace.y, splatCenterInViewSpace.z};
 
-    float3x3 Jacobian = float3x3(focal / t[2], 0, -(focal * t[0]) / (t[2] * t[2]), 0, focal / t[2],
+    float3x3 jacobian = float3x3(focal / t[2], 0, -(focal * t[0]) / (t[2] * t[2]), 0, focal / t[2],
                                  -(focal * t[1]) / (t[2] * t[2]), 0, 0, 0);
 
     // Here we start computing the final mapping from 3d to 2d. Essentially, we are computing equation 31
     // in the EWA Splatting paper. Vk is our final projection
     float3x3 W = (float3x3)viewMatrix;
-    float3x3 T = mul(Jacobian, W);
+    float3x3 T = mul(jacobian, W);
 
     float3x3 V = float3x3(cov3d._m00, cov3d._m01, cov3d._m02, cov3d._m01, cov3d._m11, cov3d._m12,
                           cov3d._m02, cov3d._m12, cov3d._m22);
@@ -87,6 +87,8 @@ float3 map3DGSCovarianceTo2DPlane(float3 splat3DCenter, float3x3 cov3d, float4x4
     float3x3 Vk = mul(T, mul(V, transpose(T)));
 
     // Low pass filter to make each splat at least 1px size.
+    // NOTE: This blur is applied WITHOUT alpha compensation.
+    // Use map3DGSCovarianceTo2DPlaneWithBlur for compensated version.
     Vk._m00 += 0.3;
     Vk._m11 += 0.3;
 
@@ -100,6 +102,65 @@ float3 map3DGSCovarianceTo2DPlane(float3 splat3DCenter, float3x3 cov3d, float4x4
     // determine the lengths of the major and minor axes, and the covariance determines the orientation of the ellipse.
     // by returning the variances cov[0][0] and cov[1][1] and the covariance cov[0][1], you have
     // enough info to describe the ellipse's shape and orientation
+
+    return float3(Vk._m00, Vk._m01, Vk._m11);
+}
+
+// Same as map3DGSCovarianceTo2DPlane but with alpha compensation for the blur.
+// This adjusts alpha to preserve integrated intensity when the covariance is enlarged by the low-pass filter
+// blurAmount: the amount of blur to add to the covariance diagonal (default 0.3)
+// blurAdjust: output factor to multiply alpha by to compensate for blur
+float3 map3DGSCovarianceTo2DPlaneWithBlur(float3 splat3DCenter, float3x3 cov3d, float4x4 matrixV,
+                                          float4x4 matrixP, float4 screenParams,
+                                          float blurAmount, out float blurAdjust) {
+
+    // Transform the splat center to view space
+    float4x4 viewMatrix = matrixV;
+    float3 splatCenterInViewSpace = mul(viewMatrix, float4(splat3DCenter, 1)).xyz;
+
+    // This is necessary to avoid extreme projection distortions
+    float aspect = matrixP._m00 / matrixP._m11;
+    float tanFovX = rcp(matrixP._m00);
+    float tanFovY = rcp(matrixP._m11 * aspect);
+    float limX = 1.3 * tanFovX;
+    float limY = 1.3 * tanFovY;
+
+    // Do perspective divide
+    float xOverZ = splatCenterInViewSpace.x / splatCenterInViewSpace.z;
+    float yOverZ = splatCenterInViewSpace.y / splatCenterInViewSpace.z;
+
+    // clamp the splat center to stay within FOV limits
+    splatCenterInViewSpace.x = clamp(xOverZ, -limX, limX) * splatCenterInViewSpace.z;
+    splatCenterInViewSpace.y = clamp(yOverZ, -limY, limY) * splatCenterInViewSpace.z;
+
+    float focal = screenParams.x * matrixP._m00 / 2;
+
+    float t[3] = {splatCenterInViewSpace.x, splatCenterInViewSpace.y, splatCenterInViewSpace.z};
+
+    float3x3 jacobian = float3x3(focal / t[2], 0, -(focal * t[0]) / (t[2] * t[2]), 0, focal / t[2],
+                                 -(focal * t[1]) / (t[2] * t[2]), 0, 0, 0);
+
+    float3x3 W = (float3x3)viewMatrix;
+    float3x3 T = mul(jacobian, W);
+
+    float3x3 V = float3x3(cov3d._m00, cov3d._m01, cov3d._m02, cov3d._m01, cov3d._m11, cov3d._m12,
+                          cov3d._m02, cov3d._m12, cov3d._m22);
+
+    float3x3 Vk = mul(T, mul(V, transpose(T)));
+
+    // Compute determinant BEFORE blur for alpha compensation
+    float detOrig = Vk._m00 * Vk._m11 - Vk._m01 * Vk._m01;
+
+    // Low pass filter to make each splat at least 1px size
+    Vk._m00 += blurAmount;
+    Vk._m11 += blurAmount;
+
+    // Compute determinant AFTER blur
+    float det = Vk._m00 * Vk._m11 - Vk._m01 * Vk._m01;
+
+    // Compute alpha compensation factor: sqrt(detOrig / det)
+    // This preserves the integrated intensity of the Gaussian after blurring
+    blurAdjust = (det > 0.0) ? sqrt(max(0.0, detOrig / det)) : 1.0;
 
     return float3(Vk._m00, Vk._m01, Vk._m11);
 }

@@ -1,6 +1,8 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CopyBufferMain
 
+#include_with_pragmas "MirisThreadGroupSize.hlsl"
+
 StructuredBuffer<uint> _sourceBuffer;
 RWStructuredBuffer<uint> _destBuffer;
 
@@ -8,7 +10,7 @@ int _Length;
 int _SrcOffset;
 int _DestOffset;
 
-[numthreads(1024,1,1)]
+[numthreads(THREADS_PER_GROUP,1,1)]
 void CopyBufferMain (uint3 id : SV_DispatchThreadID)
 {
     if (id.x < (unsigned int)_Length) {

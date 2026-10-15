@@ -31,9 +31,9 @@ namespace GaussianSplatting.Runtime
 
         public struct Args
         {
-            public uint             count;
-            public ComputeBuffer   inputKeys;
-            public ComputeBuffer   inputValues;
+            public uint count;
+            public ComputeBuffer inputKeys;
+            public ComputeBuffer inputValues;
             public SupportResources resources;
             internal int workGroupCount;
         }
@@ -49,14 +49,14 @@ namespace GaussianSplatting.Runtime
             public static SupportResources Load(uint count)
             {
                 //This is threadBlocks * DEVICE_RADIX_SORT_RADIX
-                uint scratchBufferSize = DivRoundUp(count, DEVICE_RADIX_SORT_PARTITION_SIZE) * DEVICE_RADIX_SORT_RADIX; 
+                uint scratchBufferSize = DivRoundUp(count, DEVICE_RADIX_SORT_PARTITION_SIZE) * DEVICE_RADIX_SORT_RADIX;
                 uint reducedScratchBufferSize = DEVICE_RADIX_SORT_RADIX * DEVICE_RADIX_SORT_PASSES;
 
                 var target = ComputeBufferType.Structured;
                 var resources = new SupportResources
                 {
                     countLimit = count,
-                    altBuffer = new ComputeBuffer((int)count, 4, target) { name = "DeviceRadixAlt"}, 
+                    altBuffer = new ComputeBuffer((int)count, 4, target) { name = "DeviceRadixAlt" },
                     altPayloadBuffer = new ComputeBuffer((int)count, 4, target) { name = "DeviceRadixAltPayload" },
                     passHistBuffer = new ComputeBuffer((int)scratchBufferSize, 4, target) { name = "DeviceRadixPassHistogram" },
                     globalHistBuffer = new ComputeBuffer((int)reducedScratchBufferSize, 4, target) { name = "DeviceRadixGlobalHistogram" },
@@ -162,7 +162,7 @@ namespace GaussianSplatting.Runtime
             //Upsweep
             cmd.SetComputeBufferParam(m_CS, m_kernelUpsweep, "b_passHist", args.resources.passHistBuffer);
             cmd.SetComputeBufferParam(m_CS, m_kernelUpsweep, "b_globalHist", args.resources.globalHistBuffer);
-            cmd.SetComputeBufferParam(m_CS, m_kernelUpsweep, "indirectDrawBuffer", indirectDrawBuffer );
+            cmd.SetComputeBufferParam(m_CS, m_kernelUpsweep, "indirectDrawBuffer", indirectDrawBuffer);
 
             //Scan
             cmd.SetComputeBufferParam(m_CS, m_kernelScan, "b_passHist", args.resources.passHistBuffer);
@@ -173,9 +173,13 @@ namespace GaussianSplatting.Runtime
             cmd.SetComputeBufferParam(m_CS, m_kernelDownsweep, "b_globalHist", args.resources.globalHistBuffer);
             cmd.SetComputeBufferParam(m_CS, m_kernelDownsweep, "indirectDrawBuffer", indirectDrawBuffer);
 
-            //Clear the global histogram
+            //Clear the global histogram. The group count is derived rather than fixed at one:
+            //the kernel's threadgroup size shrinks on platforms that cannot run 1024 threads
+            //(see MirisThreadGroupSize.hlsl)
             cmd.SetComputeBufferParam(m_CS, m_kernelInitDeviceRadixSort, "b_globalHist", args.resources.globalHistBuffer);
-            cmd.DispatchCompute(m_CS, m_kernelInitDeviceRadixSort, 1, 1, 1);
+            m_CS.GetKernelThreadGroupSizes(m_kernelInitDeviceRadixSort, out uint initThreadsPerGroup, out _, out _);
+            cmd.DispatchCompute(m_CS, m_kernelInitDeviceRadixSort,
+                (int)DivRoundUp(DEVICE_RADIX_SORT_RADIX * DEVICE_RADIX_SORT_PASSES, initThreadsPerGroup), 1, 1);
 
             // Execute the sort algorithm in 8-bit increments
             for (constants.radixShift = 0; constants.radixShift < 32; constants.radixShift += DEVICE_RADIX_SORT_BITS)

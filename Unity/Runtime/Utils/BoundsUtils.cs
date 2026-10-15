@@ -1,11 +1,44 @@
 // Copyright © 2026 Miris, Inc. All rights reserved.
 
+using System.Collections.Generic;
+
 using UnityEngine;
 
 namespace Miris.Runtime
 {
     public class BoundsUtils
     {
+        public static bool HasFiniteSize(Bounds bounds)
+        {
+            Vector3 size = bounds.size;
+            return size != Vector3.zero
+                && !float.IsInfinity(size.x) && !float.IsInfinity(size.y)
+                && !float.IsInfinity(size.z)
+                && !float.IsNaN(size.x) && !float.IsNaN(size.y) && !float.IsNaN(size.z);
+        }
+
+        // True diagonal magnitude, used to scale camera clip planes to content size. Distinct on
+        // purpose from ViewportCameraController's CalculateCharacteristicSize() (mean edge, for
+        // interaction speed) and CalculateFrameDistance() (max edge, for initial framing
+        // distance) — each favors a different dimension of the bounds for a different piece of
+        // camera math.
+        public static float LargestMagnitude(IEnumerable<Bounds> boundsSet)
+        {
+            float largestMagnitude = 0f;
+
+            foreach (Bounds bounds in boundsSet)
+            {
+                if (!HasFiniteSize(bounds))
+                {
+                    continue;
+                }
+
+                largestMagnitude = Mathf.Max(largestMagnitude, bounds.size.magnitude);
+            }
+
+            return largestMagnitude;
+        }
+
         public static Vector3[] BoundsGetCorners(Bounds bounds)
         {
             return BoundsGetCorners(bounds, Matrix4x4.identity);

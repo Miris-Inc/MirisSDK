@@ -17,4 +17,5 @@
 #pragma require waveballot
 #pragma use_dxc
 
+#include_with_pragmas "../MirisThreadGroupSize.hlsl"
 #include "DeviceRadixSort.hlsl"
