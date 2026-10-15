@@ -1,15 +1,15 @@
 {
     "name": "Miris.SDK.Core.Tests.URP",
-    "rootNamespace": "Aqua.Tests",
+    "rootNamespace": "Miris.Tests",
     "references": [
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
         "Miris.SDK.Core.Runtime",
+        "Miris.SDK.Core.Tests",
+        "Unity.RenderPipelines.Core.Runtime",
         "Unity.RenderPipelines.Universal.Runtime"
     ],
-    "includePlatforms": [
-        "Editor"
-    ],
+    "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": true,
@@ -19,13 +19,13 @@
     "autoReferenced": false,
     "defineConstraints": [
         "UNITY_INCLUDE_TESTS",
-        "GS_ENABLE_URP"
+        "MIRIS_ENABLE_URP"
     ],
     "versionDefines": [
         {
             "name": "com.unity.render-pipelines.universal",
             "expression": "",
-            "define": "GS_ENABLE_URP"
+            "define": "MIRIS_ENABLE_URP"
         }
     ],
     "noEngineReferences": false

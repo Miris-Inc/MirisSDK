@@ -63,6 +63,7 @@ namespace Miris.Editor
             android,
             ios,
             linux,
+            visionos,
             none
         }
 
@@ -75,7 +76,8 @@ namespace Miris.Editor
             { Platform.osx,   false },
             { Platform.android, false },
             { Platform.ios,     false },
-            { Platform.linux,   false }
+            { Platform.linux,   false },
+            { Platform.visionos, false }
         };
         private static readonly Dictionary<Platform, long> platformSizes = new Dictionary<Platform, long>();
         private static readonly Dictionary<Platform, List<Asset>> platformAssets = new Dictionary<Platform, List<Asset>>();
@@ -89,6 +91,7 @@ namespace Miris.Editor
             public string android = "";
             public string ios = "";
             public string linux = "";
+            public string visionos = "";
         }
         private static InstalledVersions installed = new InstalledVersions();
 
@@ -249,7 +252,7 @@ namespace Miris.Editor
         // UI on which platforms to download
         private void DrawPlatformSection()
         {
-            EditorGUILayout.LabelField("Platforms (sdk-binaries-PLATFORM*.zip)", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Platforms", EditorStyles.boldLabel);
             using (new EditorGUILayout.VerticalScope("box"))
             {
                 EditorGUILayout.LabelField($"Release: {loadedRelease.tag_name}", EditorStyles.miniBoldLabel);
@@ -262,7 +265,7 @@ namespace Miris.Editor
                 else
                 {
                     DrawPlatformRow(Platform.windows, Platform.osx, Platform.android);
-                    DrawPlatformRow(Platform.ios, Platform.linux, Platform.none);
+                    DrawPlatformRow(Platform.ios, Platform.linux, Platform.visionos);
                 }
 
                 EditorGUILayout.Space(2);
@@ -437,22 +440,19 @@ namespace Miris.Editor
             }
         }
 
-        // Match: sdk-binaries-PLATFORM*  (case-insensitive)
+        // Match: sdk-PLATFORM-* or sdk-binaries-PLATFORM* (case-insensitive)
         // Supports .zip and .dmg (mac only) file extensions
         private static bool IsPlatformAsset(string filename, Platform p)
         {
             var f = filename.ToLowerInvariant();
-            if (!f.StartsWith("sdk-binaries-")) return false;
-
             string token = p.ToString();
             if (string.IsNullOrEmpty(token) || token == "none") return false;
 
-            var afterPrefix = f.Substring("sdk-binaries-".Length);
+            bool prefixOk = f.StartsWith($"sdk-{token}-") || f.StartsWith($"sdk-binaries-{token}");
+            if (!prefixOk) return false;
 
             bool isMac = (p == Platform.osx);
-            bool endsOk = isMac ? (f.EndsWith(".zip") || f.EndsWith(".dmg")) : f.EndsWith(".zip");
-
-            return afterPrefix.StartsWith(token) && endsOk;
+            return isMac ? (f.EndsWith(".zip") || f.EndsWith(".dmg")) : f.EndsWith(".zip");
         }
 
         // Install selected platforms
@@ -611,6 +611,7 @@ namespace Miris.Editor
                 importer.SetCompatibleWithPlatform(BuildTarget.Android, plat == Platform.android);
                 importer.SetCompatibleWithPlatform(BuildTarget.iOS, plat == Platform.ios);
                 importer.SetCompatibleWithPlatform(BuildTarget.StandaloneLinux64, plat == Platform.linux);
+                importer.SetCompatibleWithPlatform(BuildTarget.VisionOS, plat == Platform.visionos);
 
                 importer.SaveAndReimport();
             }
@@ -768,6 +769,7 @@ namespace Miris.Editor
                 case Platform.android: return installed.android;
                 case Platform.ios:     return installed.ios;
                 case Platform.linux:   return installed.linux;
+                case Platform.visionos: return installed.visionos;
                 default: return "";
             }
         }
@@ -781,6 +783,7 @@ namespace Miris.Editor
                 case Platform.android: installed.android = version; break;
                 case Platform.ios:     installed.ios     = version; break;
                 case Platform.linux:   installed.linux   = version; break;
+                case Platform.visionos: installed.visionos = version; break;
             }
         }
 
