@@ -114,11 +114,6 @@ public class MirisBindings {
     return ret;
   }
 
-  public static StreamStatus GetStreamStatus(global::System.IntPtr client, int streamObjectId) {
-    StreamStatus ret = (StreamStatus)MirisBindingsPINVOKE.GetStreamStatus(client, streamObjectId);
-    return ret;
-  }
-
   public static AquaStatus SetMainCameraTransform(global::System.IntPtr client, float[] cameraTransform) {
     AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.SetMainCameraTransform(client, cameraTransform);
     return ret;
@@ -216,6 +211,16 @@ public class MirisBindings {
 
   public static int GetAttributeCount(global::System.IntPtr client, int sceneObjectId) {
     int ret = MirisBindingsPINVOKE.GetAttributeCount(client, sceneObjectId);
+    return ret;
+  }
+
+  public static bool HasAttribute(global::System.IntPtr client, int sceneObjectId, string attributeName) {
+    bool ret = MirisBindingsPINVOKE.HasAttribute(client, sceneObjectId, attributeName);
+    return ret;
+  }
+
+  public static AquaStatus GetAttribute(global::System.IntPtr client, int sceneObjectId, string attributeName, ref global::Miris.Runtime.AttributeInfo attributeInfo) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.GetAttribute(client, sceneObjectId, attributeName, ref attributeInfo);
     return ret;
   }
 

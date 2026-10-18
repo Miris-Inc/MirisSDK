@@ -21,8 +21,6 @@ Shader "Miris/SplatComposite"
         _RightTex ("Right eye surface", 2D) = "black" {}
         // 1 flips V when sampling, 0 does not. See SplatRenderer.CompositeVFlip.
         _VFlip ("Flip V", Float) = 1
-        // See MirisStreamController.OutputOpacity.
-        _OutputOpacity ("Output opacity", Float) = 1
     }
 
     SubShader
@@ -78,7 +76,6 @@ Shader "Miris/SplatComposite"
             sampler2D _LeftTex;
             sampler2D _RightTex;
             float _VFlip;
-            float _OutputOpacity;
             // Not in Properties: ShaderLab has no Matrix type, and one there fails to compile.
             // Bound by Material.SetMatrix from SharkSplatRenderSystem.
             float4x4 _ReprojLeft;
@@ -152,7 +149,7 @@ Shader "Miris/SplatComposite"
 
                 // All four channels: the surface is premultiplied (see the Blend note), so colour
                 // and alpha fall off together.
-                return colour * (mask * _OutputOpacity);
+                return colour * mask;
             }
             ENDCG
         }

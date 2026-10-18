@@ -16,6 +16,11 @@
     "defineConstraints": [],
     "versionDefines": [
         {
+            "name": "com.unity.render-pipelines.universal",
+            "expression": "",
+            "define": "GS_ENABLE_URP"
+        },
+        {
             "name": "com.unity.xr.management",
             "expression": "",
             "define": "MIRIS_ENABLE_XR_MANAGEMENT"
