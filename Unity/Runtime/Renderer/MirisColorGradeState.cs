@@ -30,7 +30,7 @@ namespace Miris.Runtime
         // The grade is one full-screen pass over one process-wide state, so exactly one component
         // owns it. Without an owner, two enabled components overwrite each other's LUT and either
         // one's OnDisable takes the grade away from the other.
-        private static Object m_owner;
+        private static MirisColorGrade m_owner;
 
         public static Texture2D Lut => m_lut;
 
@@ -38,14 +38,14 @@ namespace Miris.Runtime
 
         public static bool IsActive => m_lut != null;
 
-        public static bool IsOwner(Object component) => m_owner == component;
+        public static bool IsOwner(MirisColorGrade component) => m_owner == component;
 
         /// <summary>
         /// Claims the grade for <paramref name="component"/> and sets it. The first component to
         /// ask owns the grade until it releases it.
         /// </summary>
         /// <returns>False if another component already owns the grade, leaving the state alone.</returns>
-        public static bool SetFrom(Object component, Texture2D lut, float strength)
+        public static bool SetFrom(MirisColorGrade component, Texture2D lut, float strength)
         {
             // Unity's null overload: an owner destroyed without releasing compares equal to null,
             // so the grade is claimable again rather than stuck.
@@ -66,7 +66,7 @@ namespace Miris.Runtime
         /// Releases the grade if <paramref name="component"/> owns it. A non-owner's call does
         /// nothing, so disabling a second component cannot clear the owner's grade.
         /// </summary>
-        public static void ClearFrom(Object component)
+        public static void ClearFrom(MirisColorGrade component)
         {
             if (m_owner != component)
             {

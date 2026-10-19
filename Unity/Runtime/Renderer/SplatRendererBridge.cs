@@ -14,15 +14,6 @@ namespace Miris.Runtime
         public const int FrameEventId = 0;
         public const int ShutdownEventId = 1;
 
-        // Renders one view into one slot of its ring, for a composite later in the frame. Must be
-        // issued outside Unity's render passes - see kAquaSplatRendererEventViewBase.
-        const int ViewEventBase = 0x10000;
-
-        public static int ViewEventId(int viewIndex, int slot, int ringDepth)
-        {
-            return ViewEventBase + viewIndex * ringDepth + slot;
-        }
-
         // 1 real, 0 stub. Callers want SharkSplatRenderSystem.IsSupported, which caches this.
         [DllImport(MirisApi.AquaUnityPath)]
         static public extern int AquaSplatRenderer_IsAvailable();
@@ -69,11 +60,6 @@ namespace Miris.Runtime
         [DllImport(MirisApi.AquaUnityPath)]
         static public extern void AquaSplatRenderer_SetModelOpacity(int renderer, int modelRootObjectId, float opacity);
 
-        // Renders textured gaussians on pixels no surfel covers. Any time after Create; takes
-        // effect on the next frame.
-        [DllImport(MirisApi.AquaUnityPath)]
-        static public extern void AquaSplatRenderer_SetSurfelLessTextureSplatsEnabled(int renderer, int enabled);
-
         // Hands native the scene changes the SDK drained this frame. Must be called from inside the
         // drain scope (MirisStreamController.SceneChangesDrained): the scene lock is held there and
         // the arrays are freed when it exits, so this one is NOT deferred to the render thread.
@@ -105,20 +91,6 @@ namespace Miris.Runtime
         [DllImport(MirisApi.AquaUnityPath)]
         static public extern int AquaSplatRenderer_GetSlotPose(int renderer, int viewIndex, int slot, float[] view,
                                                                float[] proj);
-
-        // How many view events have rendered this view since its targets were created; 0 means
-        // nothing to composite yet. -1 bad renderer or view.
-        [DllImport(MirisApi.AquaUnityPath)]
-        static public extern int AquaSplatRenderer_GetViewRenderCount(int renderer, int viewIndex);
-
-        // Frees a view whose camera has gone. CreateTarget for the index again to reuse it.
-        [DllImport(MirisApi.AquaUnityPath)]
-        static public extern int AquaSplatRenderer_ReleaseView(int renderer, int viewIndex);
-
-        // Changes the render size without restarting Shark. Every target is released, so they
-        // have to be created again at the new size.
-        [DllImport(MirisApi.AquaUnityPath)]
-        static public extern int AquaSplatRenderer_Resize(int renderer, int width, int height);
 
         [DllImport(MirisApi.AquaUnityPath)]
         static public extern IntPtr AquaSplatRenderer_GetRenderEventCallbackPtr();

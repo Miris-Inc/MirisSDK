@@ -51,9 +51,6 @@ namespace Miris.Runtime
         [NonSerialized]
         private bool m_firedLoadedActions = false;
 
-        [NonSerialized]
-        internal StreamStatus m_status = StreamStatus.Unknown;
-
         // Last fetch mode applied; avoids redundant SetStreamFetchMode calls. See SyncFetchMode.
         [NonSerialized]
         private StreamFetchMode m_lastAppliedFetchMode = StreamFetchMode.Regular;
@@ -65,9 +62,55 @@ namespace Miris.Runtime
         // When true, fetch mode is always Regular regardless of opacity.
         public static bool PrefetchDisabledGlobally = false;
 
+        [NonSerialized]
+        private bool m_renderedExternallyValue = false;
+
+        /// <summary>
+        /// Whether something other than the SDK's own renderer draws this stream's splats - Shark,
+        /// through SharkSplatRenderSystem. Set by MirisStreamController when the stream registers.
+        /// </summary>
+        public bool RenderedExternally
+        {
+            get => m_renderedExternallyValue;
+            set
+            {
+                if (m_renderedExternallyValue == value)
+                {
+                    return;
+                }
+                m_renderedExternallyValue = value;
+
+                foreach (MirisAssetRenderComponent renderComponent in m_modelRootObjectIdToRenderComponent.Values)
+                {
+                    renderComponent.SetRenderingSuppressed(value);
+                }
+            }
+        }
+
         public List<Action> m_onLoadActions = new List<Action>();
         public List<Action> m_onLoadedActions = new List<Action>();
         public List<Action> m_onUnloadedActions = new List<Action>();
+
+        public enum Status
+        {
+            Disabled,
+
+            NoController,
+
+            ControllerInactive,
+
+            NoAssetId,
+
+            NotLoaded,
+
+            Streaming,
+
+            NoData,
+
+            Ready,
+
+            Rendered
+        }
 
         #region Public API
         public float Opacity
@@ -90,35 +133,74 @@ namespace Miris.Runtime
         }
 
         /// <summary>
-        /// How far the native stream has progressed towards renderable data, as of the
-        /// controller's last scene sync. Unknown until the stream is added to the native scene,
-        /// and again after it is removed.
+        /// Reports how far this stream has progressed towards rendering. Each state is
+        /// derived from current state on every call, so it always reflects the stream as
+        /// it stands rather than the last transition someone remembered to record.
         /// </summary>
-        public StreamStatus GetStatus()
+        /// <returns>The stream's current <see cref="Status"/></returns>
+        public Status GetStatus()
         {
-            return m_status;
-        }
+            if (!isActiveAndEnabled)
+            {
+                return Status.Disabled;
+            }
 
-        /// <summary>
-        /// Whether Shark is drawing this stream's splats: it is Ready, visible, and its render
-        /// components hold valid data. A stream at opacity 0 is not, even when
-        /// <see cref="GetStatus"/> is Ready.
-        /// </summary>
-        public bool IsRendered()
-        {
-            return m_opacity > 0f && m_status == StreamStatus.Ready && HasValidRenderData();
-        }
+            if (m_streamController == null)
+            {
+                return Status.NoController;
+            }
 
-        private bool HasValidRenderData()
-        {
+            if (!m_streamController.IsActive())
+            {
+                return Status.ControllerInactive;
+            }
+
+            if (string.IsNullOrEmpty(m_assetId))
+            {
+                return Status.NoAssetId;
+            }
+
+            if (!IsLoaded())
+            {
+                return Status.NotLoaded;
+            }
+
+            // asset is loaded but there are no components yet
+            if (m_modelRootObjectIdToRenderComponent.Count == 0)
+            {
+                return Status.Streaming;
+            }
+
+            // Any single render component drawing render data is enough to call the whole
+            // stream rendered, matching how the bounds accessors treat components.
+            bool hasValidAsset = false;
             foreach (MirisAssetRenderComponent renderComponent in m_modelRootObjectIdToRenderComponent.Values)
             {
-                if (renderComponent.IsAssetValid())
+                if (renderComponent.GetSplatCount() > 0)
                 {
-                    return true;
+                    return Status.Rendered;
                 }
+
+                hasValidAsset |= renderComponent.IsAssetValid();
             }
-            return false;
+
+            if (hasValidAsset && m_renderedExternallyValue)
+            {
+                return Status.Rendered;
+            }
+
+            if (hasValidAsset)
+            {
+                return Status.Ready;
+            }
+
+            // If prefetching, then it is legitimate to have no renderable data ready despite the stream content having been fetched (or still being fetched)
+            if (m_streamController.GetStreamFetchMode(this) == StreamFetchMode.Prefetch)
+            {
+                return Status.Streaming;
+            }
+
+            return Status.NoData;
         }
 
         public Bounds GetObjectBounds()
@@ -193,6 +275,11 @@ namespace Miris.Runtime
             return BoundsUtils.HasFiniteSize(localBounds);
         }
 
+        public MirisAssetRenderComponent[] GetRenderComponents()
+        {
+            return m_modelRootObjectIdToRenderComponent.Values.ToArray();
+        }
+
         /// <summary>
         /// How many ModelRoots this stream has populated so far. Separate from
         /// GetModelRootObjectIds because that allocates, and a caller watching for new ModelRoots
@@ -251,6 +338,7 @@ namespace Miris.Runtime
             await CheckContentChanged();
             foreach (var renderComponent in m_modelRootObjectIdToRenderComponent.Values)
             {
+                renderComponent.Opacity = m_opacity;
                 renderComponent.Update(transform);
             }
 
@@ -365,9 +453,8 @@ namespace Miris.Runtime
                 return;
             }
 
-            // Render components trail the native status by a frame, and OnStreamLoaded fits
-            // the camera to their bounds.
-            if (m_status != StreamStatus.Ready || !HasValidRenderData())
+            Status status = GetStatus();
+            if (status != Status.Ready && status != Status.Rendered)
             {
                 return;
             }
@@ -488,7 +575,7 @@ namespace Miris.Runtime
 
         internal MirisAssetRenderComponent CreateRenderComponent(int modelRootObjectId)
         {
-            MirisAssetRenderComponent renderComponent = new();
+            MirisAssetRenderComponent renderComponent = new(m_renderedExternallyValue);
             Debug.Assert(!m_modelRootObjectIdToRenderComponent.ContainsKey(modelRootObjectId));
             m_modelRootObjectIdToRenderComponent.Add(modelRootObjectId, renderComponent);
             return renderComponent;
@@ -501,6 +588,10 @@ namespace Miris.Runtime
 
         private void ClearRenderResources()
         {
+            foreach (var renderComponent in m_modelRootObjectIdToRenderComponent.Values)
+            {
+                renderComponent.Dispose();
+            }
             m_modelRootObjectIdToRenderComponent.Clear();
 
             m_defaultCameraObject = null;
