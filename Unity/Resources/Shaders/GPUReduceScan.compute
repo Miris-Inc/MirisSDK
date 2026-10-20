@@ -1,0 +1,180 @@
+#pragma kernel LocalPrefixSum
+#pragma kernel BlockSumPrefixSum
+#pragma kernel AdjustAndCompact
+#pragma kernel StreamCompaction
+#pragma kernel ExtractSize
+#pragma kernel ClearData
+
+#include "CommonConstants.hlsl"
+
+#define BLOCK_SIZE 1024
+
+uint _KeyCount;
+uint _BlockCount;
+
+RWStructuredBuffer<uint> maskedInputData; //this buffer has 0 or 1 depending on whether the splat passed the cull test
+RWStructuredBuffer<uint> prefixSums;
+RWStructuredBuffer<uint> blockSums; //output last element of each block's prefix sum
+RWStructuredBuffer<uint> adjustedBlockSums; //output prefix sums for blocks
+
+RWStructuredBuffer<uint> scanSumsOutput;
+
+RWStructuredBuffer<uint> indirectDrawBuffer; //Used to store the total count of reduced splats
+RWStructuredBuffer<uint> indirectDispatchBuffer;
+
+RWStructuredBuffer<uint> indexInputData;
+RWStructuredBuffer<float> depthInputData;
+
+RWStructuredBuffer<uint> indexOutputData;
+RWStructuredBuffer<float> depthOutputData;
+
+uint adjustedBlockSumsLength;
+
+groupshared uint sharedData[BLOCK_SIZE];
+
+[numthreads(BLOCK_SIZE,1,1)]
+void LocalPrefixSum (uint3 id : SV_DispatchThreadID,
+                     uint3 groupId:SV_GroupID,
+                     uint3 threadId:SV_GroupThreadID)
+{
+    //load input data into shared memory
+    uint index = id.x;
+    if (index < _KeyCount) {
+        sharedData[threadId.x]=maskedInputData[index];
+    } else {
+        sharedData[threadId.x] = 0;
+    }
+
+    GroupMemoryBarrierWithGroupSync();
+
+    //up-sweep
+    for(uint offset=1;offset<BLOCK_SIZE;offset*=2)
+    {
+        uint temp=0;
+        if(threadId.x>=offset)
+        {
+            temp=sharedData[threadId.x-offset];
+        }
+
+        GroupMemoryBarrierWithGroupSync();
+        sharedData[threadId.x]+=temp;
+        GroupMemoryBarrierWithGroupSync();
+    }
+    
+    //store the final prefix sum in the output buffer
+    prefixSums[index]=sharedData[threadId.x];
+
+    //store the sum of this blocks
+    if(threadId.x==BLOCK_SIZE-1)
+    {
+        blockSums[groupId.x]=sharedData[threadId.x];
+    }
+    
+}
+
+[numthreads(BLOCK_SIZE,1,1)]
+void BlockSumPrefixSum (uint3 id : SV_DispatchThreadID,
+                        uint3 groupId:SV_GroupID,
+                        uint3 threadId:SV_GroupThreadID)
+{
+    uint index = id.x;
+    if (index < _BlockCount) {
+        sharedData[threadId.x]=blockSums[index];
+    } else {
+        sharedData[threadId.x] = 0;
+    }
+
+    GroupMemoryBarrierWithGroupSync();
+
+    //compute prefix sum on block sum
+    for(uint offset=1; offset<BLOCK_SIZE; offset*=2)
+    {
+        uint temp=0;
+        if(threadId.x>=offset)
+        {
+            temp=sharedData[threadId.x-offset];
+        }
+
+        GroupMemoryBarrierWithGroupSync();
+        sharedData[threadId.x]+=temp;
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    //write back the prefix sum of block sum
+    if (index < _BlockCount) {
+        adjustedBlockSums[index]=sharedData[threadId.x];
+    }
+
+}
+
+[numthreads(BLOCK_SIZE,1,1)]
+void AdjustAndCompact (uint3 id : SV_DispatchThreadID,
+                        uint3 groupId:SV_GroupID,
+                        uint3 threadId:SV_GroupThreadID)
+{
+    uint index = id.x;
+    if (index >= _KeyCount) {
+        return;
+    }
+
+    uint blockID=groupId.x;
+
+    //Get the cummulative sum of all previous blocks
+    uint blockSumOffset=blockID>0 ? adjustedBlockSums[blockID-1] : 0;
+
+    //adjust the prefix sum by adding the block sum offset
+    scanSumsOutput[index]=prefixSums[index]+blockSumOffset;
+    
+}
+
+[numthreads(BLOCK_SIZE,1,1)]
+void StreamCompaction (uint3 id : SV_DispatchThreadID)
+{
+    uint index = id.x;
+    if (index >= _KeyCount) {
+        return;
+    }
+
+    //check if the splat passed the frustum test
+    if(maskedInputData[index]==1)
+    {
+        //Get the new position for this depth value from the prefix sum buffer
+        uint newIndex=scanSumsOutput[index]-1;
+
+        //Store the valid depth in the compacted buffer
+        depthOutputData[newIndex]=depthInputData[index];
+        indexOutputData[newIndex]=indexInputData[index];
+    }
+}
+
+[numthreads(1,1,1)]
+void ExtractSize (uint3 id : SV_DispatchThreadID)
+{
+    uint totalElements=adjustedBlockSums[adjustedBlockSumsLength-1];
+    
+    //offset: index count per instance, instance count, start index location, base vertex location, and start instance location
+    indirectDrawBuffer[IND_DRAW_PARAMS_COUNT_PER_INSTANCE] = 6; //index count per instance
+    indirectDrawBuffer[IND_DRAW_PARAMS_TOTAL_INSTANCE_COUNT] = min(totalElements, _KeyCount); //instance count
+    indirectDrawBuffer[IND_DRAW_PARAMS_START_INDEX_LOCATION] = 0; //start index location
+    indirectDrawBuffer[IND_DRAW_PARAMS_BASE_VERTEX_LOCATION] = 0; //base vertex location
+    indirectDrawBuffer[IND_DRAW_PARAMS_START_INDEX_LOCATION] = 0; //start instance location
+
+    // compute number of thread groups needed
+    indirectDispatchBuffer[IND_DISPATCH_THREADGROUPS_X_DIRECTION] = (min(totalElements, _KeyCount) + BLOCK_SIZE - 1)/BLOCK_SIZE;
+    indirectDispatchBuffer[IND_DISPATCH_THREADGROUPS_Y_DIRECTION] = 1;
+    indirectDispatchBuffer[IND_DISPATCH_THREADGROUPS_Z_DIRECTION] = 1;
+    indirectDispatchBuffer[IND_DISPATCH_PADDING] = 0; // padding
+    
+}
+
+[numthreads(BLOCK_SIZE,1,1)]
+void ClearData (uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _KeyCount) {
+        return;
+    }
+
+    //set output data to default values
+    depthOutputData[id.x]=-100000.0;  //setting depth to a low enough value
+    indexOutputData[id.x]=0xFFFFFFFF;  
+}
