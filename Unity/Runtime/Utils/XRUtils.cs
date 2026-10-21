@@ -1,11 +1,18 @@
 // Copyright © 2026 Miris, Inc. All rights reserved.
+using System.Collections.Generic;
+
 using UnityEngine;
+using UnityEngine.XR;
 #if MIRIS_ENABLE_XR_MANAGEMENT
 using UnityEngine.XR.Management;
 #endif
 
 namespace Miris.Runtime
 {
+    public static class XRFrameInfo {
+        public static int m_multipassId { get; set; }
+    }
+    
     public class XRUtils
     {
 
@@ -34,6 +41,14 @@ namespace Miris.Runtime
 #endif
         }
 
+        // TODO:: Move subsystem to be a member variable to reduce cost of instantiating new subsystem list every call
+        private XRInputSubsystem GetXRInputSubsystem()
+        {
+            List<XRInputSubsystem> subsystems = new List<XRInputSubsystem>();
+            SubsystemManager.GetSubsystems(subsystems);
+            return subsystems.Count > 0 ? subsystems[0] : null;
+        }
+
         // TODO: Profile and look into how to find exact y value of current position
         // Most likely Distance comapres from originTransform x/z values to points
         public (Vector3, Quaternion, Vector3) GetXRFloorTransform(Transform originTransform){
@@ -49,5 +64,89 @@ namespace Miris.Runtime
                 return (Vector3.zero, Quaternion.identity, Vector3.one);
             }
         }
+
+        
+        public float GetXRFloorHeight(GameObject gameObject)
+        {
+            if(gameObject != null){
+                (Vector3 pos, Quaternion rot, Vector3 scale) = GetXRFloorTransform(gameObject.transform);
+                return pos.y;
+            } else { 
+                return -1 * c_desktopUserHeight;
+            }
+        }
+        
+        public bool IsSinglePassXR() 
+        {
+                
+            if (!XRSettings.enabled) 
+            {
+                return false;
+            }
+
+            return XRSettings.stereoRenderingMode == XRSettings.StereoRenderingMode.SinglePassInstanced ||
+                   XRSettings.stereoRenderingMode == XRSettings.StereoRenderingMode.SinglePassMultiview;
+
+        }
+
+        // Single-pass instanced only, as distinct from IsSinglePassXR which also covers
+        // multiview. The OpenXR render mode is a single control labelled "Single Pass Instanced \
+        // Multi-view" that resolves to instancing on D3D11/Metal and to multiview on Vulkan/GLES.
+        // The two differ in the shader: instancing doubles the instance stream and packs the eye
+        // into its low bit, multiview does not and supplies the eye through the view index.
+        public bool IsSinglePassInstancedXR()
+        {
+            if (!XRSettings.enabled)
+            {
+                return false;
+            }
+
+            return XRSettings.stereoRenderingMode == XRSettings.StereoRenderingMode.SinglePassInstanced;
+        }
+
+        public bool IsSinglePassMultiviewXR()
+        {
+            if (!XRSettings.enabled)
+            {
+                return false;
+            }
+
+            return XRSettings.stereoRenderingMode == XRSettings.StereoRenderingMode.SinglePassMultiview;
+        }
+
+        public bool IsMultiPassXR() 
+        {
+            if (!XRSettings.enabled) 
+            {
+                return false;
+            }
+
+            return XRSettings.stereoRenderingMode == XRSettings.StereoRenderingMode.MultiPass; 
+            
+        }
+
+        public bool SortMonoOrLeftEye(Camera camera) {
+            return (camera.stereoActiveEye == Camera.MonoOrStereoscopicEye.Mono || camera.stereoActiveEye == Camera.MonoOrStereoscopicEye.Left);
+        }
+        
+        public bool IsStereo()
+        {
+            return (IsMultiPassXR() || IsSinglePassXR());    
+        }
+        
+        public int GetEyeCount() 
+        {
+            if (!XRSettings.enabled) 
+            {
+                return 1;
+            }
+
+            if (IsSinglePassXR()) {
+                return 2;
+            } 
+
+            return 1;
+        }
+
     }
 }

@@ -58,64 +58,6 @@ namespace Miris.Editor
         }
 
         /// <summary>
-        /// Lets the Scene view's Frame Selected (F) fit the streamed content. Unity can't measure
-        /// a stream on its own because the splats aren't drawn by a Renderer.
-        /// </summary>
-        public bool HasFrameBounds()
-        {
-            return TryGetFrameBounds(out Bounds _);
-        }
-
-        public Bounds OnGetFrameBounds()
-        {
-            TryGetFrameBounds(out Bounds bounds);
-            return bounds;
-        }
-
-        private bool TryGetFrameBounds(out Bounds bounds)
-        {
-            bounds = new Bounds();
-            bool hasBounds = false;
-
-            foreach (Object streamTarget in targets)
-            {
-                Bounds streamBounds = ((MirisStream)streamTarget).GetWorldBounds();
-                if (!IsFramable(streamBounds))
-                {
-                    continue;
-                }
-
-                if (hasBounds)
-                {
-                    bounds.Encapsulate(streamBounds);
-                }
-                else
-                {
-                    bounds = streamBounds;
-                    hasBounds = true;
-                }
-            }
-
-            return hasBounds;
-        }
-
-        // Rejects the zero-size box of an unloaded stream and any non-finite or inverted box.
-        private static bool IsFramable(Bounds bounds)
-        {
-            Vector3 size = bounds.size;
-            for (int axis = 0; axis < 3; axis++)
-            {
-                if (!float.IsFinite(size[axis]) || size[axis] < 0.0f
-                    || !float.IsFinite(bounds.center[axis]))
-                {
-                    return false;
-                }
-            }
-
-            return size.sqrMagnitude > 0.0f;
-        }
-
-        /// <summary>
         /// Read-only summary of the default camera / viewing volume this stream's content
         /// authored -- both are per-stream, so this always reflects this component's own asset
         /// rather than whatever else the scene has loaded. Omitted entirely when the content
@@ -137,8 +79,8 @@ namespace Miris.Editor
 
         private void DrawBadge(MirisStream stream)
         {
-            Badge badge = GetBadge(stream);
-            Color color = badge.m_color;
+            MirisStream.Status status = stream.GetStatus();
+            Color color = GetStatusColor(status);
 
             Rect badgeRect = EditorGUILayout.GetControlRect(false, BadgeHeight);
             DrawBadgeBackground(badgeRect, color);
@@ -155,16 +97,16 @@ namespace Miris.Editor
             float textWidth = badgeRect.xMax - textX - Padding;
 
             Rect titleRect = new Rect(textX, badgeRect.y + 5.0f, textWidth, 16.0f);
-            GUI.Label(titleRect, badge.m_title, m_titleStyle);
+            GUI.Label(titleRect, GetStatusTitle(status), m_titleStyle);
 
             Rect detailRect = new Rect(textX, badgeRect.y + 21.0f, textWidth, 16.0f);
-            GUI.Label(detailRect, badge.m_detail, m_detailStyle);
+            GUI.Label(detailRect, GetStatusDetail(status), m_detailStyle);
         }
 
         private void DrawCompactBadge(MirisStream stream)
         {
-            Badge badge = GetBadge(stream);
-            Color color = badge.m_color;
+            MirisStream.Status status = stream.GetStatus();
+            Color color = GetStatusColor(status);
 
             Rect badgeRect = EditorGUILayout.GetControlRect(false, CompactBadgeHeight);
             DrawBadgeBackground(badgeRect, color);
@@ -179,7 +121,7 @@ namespace Miris.Editor
 
             float textX = dotRect.xMax + Padding;
             Rect labelRect = new Rect(textX, badgeRect.y + 2.0f, badgeRect.xMax - textX - Padding, 16.0f);
-            GUI.Label(labelRect, $"{stream.name} — {badge.m_title}", m_detailStyle);
+            GUI.Label(labelRect, $"{stream.name} — {GetStatusTitle(status)}", m_detailStyle);
         }
 
         private static void DrawStatusDot(Rect dotRect, Color color)
@@ -203,64 +145,102 @@ namespace Miris.Editor
             EditorGUI.DrawRect(badgeRect, background);
         }
 
-        private struct Badge
+        private static Color GetStatusColor(MirisStream.Status status)
         {
-            public string m_title;
-            public string m_detail;
-            public Color m_color;
-
-            public Badge(string title, string detail, Color color)
+            switch (status)
             {
-                m_title = title;
-                m_detail = detail;
-                m_color = color;
+                case MirisStream.Status.Disabled:
+                    return s_idleColor;
+
+                case MirisStream.Status.NoController:
+                case MirisStream.Status.ControllerInactive:
+                case MirisStream.Status.NoData:
+                    return s_errorColor;
+
+                case MirisStream.Status.NoAssetId:
+                    return s_actionColor;
+
+                case MirisStream.Status.NotLoaded:
+                case MirisStream.Status.Streaming:
+                case MirisStream.Status.Ready:
+                    return s_progressColor;
+
+                case MirisStream.Status.Rendered:
+                    return s_readyColor;
+
+                default:
+                    return s_idleColor;
             }
         }
 
-        // The component's own setup comes first; past that, the native status decides.
-        private static Badge GetBadge(MirisStream stream)
+        private static string GetStatusTitle(MirisStream.Status status)
         {
-            if (!stream.isActiveAndEnabled)
+            switch (status)
             {
-                return new Badge("Disabled", "Component is inactive. Render resources have been released.", s_idleColor);
-            }
+                case MirisStream.Status.Disabled:
+                    return "Disabled";
 
-            if (stream.m_streamController == null)
-            {
-                return new Badge("No Controller", "Assign a Miris Stream Controller, or add one to the scene.", s_errorColor);
-            }
+                case MirisStream.Status.NoController:
+                    return "No Controller";
 
-            if (!stream.m_streamController.IsActive())
-            {
-                return new Badge("Controller Inactive", "Controller assigned, but its client is not running yet.", s_errorColor);
-            }
+                case MirisStream.Status.ControllerInactive:
+                    return "Controller Inactive";
 
-            if (string.IsNullOrEmpty(stream.m_assetId))
-            {
-                return new Badge("No Asset Id", "Set an Asset Id to stream content.", s_actionColor);
-            }
+                case MirisStream.Status.NoAssetId:
+                    return "No Asset Id";
 
-            if (stream.IsRendered())
-            {
-                return new Badge("Rendered", "Rendering.", s_readyColor);
-            }
+                case MirisStream.Status.NotLoaded:
+                    return "Not Loaded";
 
-            switch (stream.GetStatus())
-            {
-                case StreamStatus.Resolving:
-                    return new Badge("Resolving", "Looking up the Asset Id.", s_progressColor);
+                case MirisStream.Status.Streaming:
+                    return "Streaming";
 
-                case StreamStatus.Loading:
-                    return new Badge("Loading", "Registered with the scene. Fetching asset contents.", s_progressColor);
+                case MirisStream.Status.NoData:
+                    return "No Data";
 
-                case StreamStatus.Ready:
-                    return new Badge("Ready", "Render data is resident but not drawn this frame.", s_progressColor);
+                case MirisStream.Status.Ready:
+                    return "Ready";
 
-                case StreamStatus.Failed:
-                    return new Badge("Failed", "The asset could not be loaded. See the console for details.", s_errorColor);
+                case MirisStream.Status.Rendered:
+                    return "Rendered";
 
                 default:
-                    return new Badge("Not Loaded", "Asset Id set. Waiting to register with the scene.", s_progressColor);
+                    return status.ToString();
+            }
+        }
+
+        private static string GetStatusDetail(MirisStream.Status status)
+        {
+            switch (status)
+            {
+                case MirisStream.Status.Disabled:
+                    return "Component is inactive. Render resources have been released.";
+
+                case MirisStream.Status.NoController:
+                    return "Assign a Miris Stream Controller, or add one to the scene.";
+
+                case MirisStream.Status.ControllerInactive:
+                    return "Controller assigned, but its client is not running yet.";
+
+                case MirisStream.Status.NoAssetId:
+                    return "Set an Asset Id to stream content.";
+
+                case MirisStream.Status.NotLoaded:
+                    return "Asset Id set. Waiting to register with the scene.";
+
+                case MirisStream.Status.Streaming:
+                    return "Registered with the scene. Fetching asset contents.";
+
+                case MirisStream.Status.NoData:
+                    return "Asset arrived but carries no usable render data.";
+
+                case MirisStream.Status.Ready:
+                    return "Render data is valid. Building GPU resources.";
+
+                case MirisStream.Status.Rendered:
+                    return "Rendering.";
+                default:
+                    return string.Empty;
             }
         }
 

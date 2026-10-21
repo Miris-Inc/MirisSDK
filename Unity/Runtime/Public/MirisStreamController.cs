@@ -2,13 +2,13 @@
 
 // Standard library
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
 
 // Unity engine
 using UnityEngine;
-using UnityEngine.Rendering;
 
 // Unity packages
 using Unity.Profiling;
@@ -22,6 +22,21 @@ namespace Miris.Runtime
     [ExecuteInEditMode]
     public class MirisStreamController : MonoBehaviour
     {
+        /// <summary>
+        /// Which renderer draws this controller's splats.
+        /// </summary>
+        public enum RenderBackend
+        {
+            /// <summary>Unity compute shaders, via MirisAssetRenderSystem.</summary>
+            Unity,
+
+            /// <summary>
+            /// The native Shark rasterizer, via SharkSplatRenderSystem.
+            /// Anywhere else the controller logs and falls back to <see cref="Unity"/>.
+            /// </summary>
+            Native,
+        }
+
         [NonSerialized]
         public bool m_loadedMetadata = false;
 
@@ -79,11 +94,13 @@ namespace Miris.Runtime
             s_profilerPrefix + "Sync Scene"
         );
 
-        // Lazily update the render components' data sources only when the set of data sources changes.
+        internal float m_fadeDurationSeconds = 0.3f;
+
+        // Tracks the coroutines responsible for transitioning LODs.
+        private Dictionary<int, Coroutine> m_fadeCoroutines = new();
+
+        // Lazily update the renderable objects only when data source's active state changes.
         private bool m_updateRenderableObjects = false;
-
-        private bool m_warnedNoMainCamera = false;
-
 
         internal ClientConfig m_clientConfig;
 
@@ -97,12 +114,26 @@ namespace Miris.Runtime
         /// </summary>
         public string ViewerKey => m_viewerKey;
 
-        // Why Shark cannot draw this controller's splats, or null when it can. Set by Initialize.
-        private string m_sharkUnavailableReason;
+        [SerializeField]
+        [Tooltip("Which renderer draws this controller's splats.")]
+        private RenderBackend m_renderBackend = RenderBackend.Unity;
 
-        // Latched by a failed bring-up so the restart that follows does not retry it; cleared on
-        // OnEnable.
-        private bool m_sharkFailed;
+        // The backend which SetRenderBackend has actually switched to.
+        private RenderBackend m_appliedRenderBackend = RenderBackend.Unity;
+
+        // Requested by SetRenderBackend, carried out in LateUpdate.
+        private RenderBackend? m_pendingRenderBackend;
+
+        /// <summary>
+        /// The renderer currently drawing this controller's splats.
+        /// </summary>
+        public RenderBackend Backend => m_renderBackend;
+
+        /// <summary>
+        /// Whether <see cref="RenderBackend.Native"/> is available in this build at all, so UI can
+        /// leave the choice out rather than offer one that always falls back.
+        /// </summary>
+        public static bool IsNativeBackendSupported => SharkSplatRenderSystem.IsSupported;
 
         /// <summary>
         /// The lowest <see cref="NativeRenderScale"/> accepted.
@@ -111,96 +142,40 @@ namespace Miris.Runtime
 
         [SerializeField]
         [Range(MinNativeRenderScale, 1.0f)]
-        [Tooltip("The fraction of the display resolution splats render at, "
+        [Tooltip("Native backend only: the fraction of the display resolution splats render at, "
                  + "MetalFX-upscaled to full size. 1 renders at full size with no upscale. Where "
-                 + "MetalFX is unavailable, the smaller render is presented directly instead of "
-                 + "being upscaled.")]
+                 + "MetalFX is unavailable it renders at full size whatever this is set to.")]
         private float m_nativeRenderScale = 1.0f;
 
         // Requested by SetNativeRenderScale, carried out in LateUpdate.
         private float? m_pendingNativeRenderScale;
 
         /// <summary>
-        /// The fraction of the display resolution Shark renders at before
+        /// The fraction of the display resolution <see cref="RenderBackend.Native"/> renders at before
         /// MetalFX upscales it. Lower is cheaper and softer.
         /// </summary>
         public float NativeRenderScale => m_nativeRenderScale;
 
-        [SerializeField]
-        [Tooltip("Whether NativeRenderScale below 1 targets device resolution via "
-                 + "MetalFX, versus presenting the smaller render directly. Not runtime toggleable - "
-                 + "takes effect at renderer creation.")]
-        private bool m_deviceResolutionViaMetalFx = false;
-
-        /// <summary>
-        /// Whether <see cref="NativeRenderScale"/> below 1 targets device resolution via MetalFX,
-        /// versus presenting the smaller render directly. Not runtime toggleable.
-        /// </summary>
-        public bool DeviceResolutionViaMetalFx => m_deviceResolutionViaMetalFx;
+        // Shark drives the splats it renders straight from this controller's client, so the SDK's
+        // own renderer must be off for those streams - see MirisStream.RenderedExternally.
+        private bool IsSharkActive => m_renderBackend == RenderBackend.Native && !IsEditMode;
 
         [SerializeField]
-        [Range(1.0f, 1.3f)]
-        [Tooltip("Widens the frustum Shark renders beyond the display's, so the "
-                 + "per-frame reprojection warp has real pixels at the edges on a missed vsync instead "
-                 + "of fading to black. 1 disables it. Not runtime toggleable - takes effect at "
-                 + "renderer creation.")]
-        private float m_reprojectionOverscan = 1.0f;
-
-        /// <summary>
-        /// How much wider than the display's frustum Shark renders, to
-        /// give the reprojection warp real edge pixels on a missed vsync. 1 disables it. Not runtime
-        /// toggleable.
-        /// </summary>
-        public float ReprojectionOverscan => m_reprojectionOverscan;
-
-        // Whether Shark draws this controller's splats. Where it cannot, nothing does.
-        internal bool IsSharkActive => m_sharkUnavailableReason == null;
-
-        [SerializeField]
-        [Tooltip("Whether the surfel pass antialiases the splat disc's edge "
+        [Tooltip("Native backend only: whether the surfel pass antialiases the splat disc's edge "
                  + "at 4x. Runtime toggle restarts the renderer.")]
         private bool m_surfelMsaaEnabled = false;
 
         /// <summary>
-        /// Whether Shark antialiases the surfel pass's disc edge at 4x.
+        /// Whether <see cref="RenderBackend.Native"/> antialiases the surfel pass's disc edge at 4x.
         /// Not runtime toggleable without restarting the renderer.
         /// </summary>
         public bool SurfelMsaaEnabled => m_surfelMsaaEnabled;
-
-        [SerializeField, Range(0.0f, 1.0f)]
-        [Tooltip("Fades everything this controller draws as one finished image: 1 is opaque, 0 is "
-                 + "invisible. Streams keep streaming at any value.")]
-        private float m_outputOpacity = 1.0f;
-
-        /// <summary>
-        /// Opacity applied to the composited image of every stream this controller draws, 0 to 1.
-        /// Unlike <see cref="MirisStream.Opacity"/>, which each primitive type takes differently -
-        /// surfels dither, and native-backend glass only disappears at 0 - this fades the picture
-        /// as a whole. It does not demote streams to Prefetch or save any rendering cost.
-        /// </summary>
-        public float OutputOpacity
-        {
-            get => m_outputOpacity;
-            set => m_outputOpacity = Mathf.Clamp01(value);
-        }
 
         // The value the currently-running native renderer was created with
         private bool m_appliedSurfelMsaaEnabled = false;
 
         // Requested by SetSurfelMsaaEnabled, carried out in LateUpdate.
         private bool? m_pendingSurfelMsaaEnabled;
-
-        [SerializeField]
-        [Tooltip("Whether textured gaussians render on pixels no surfel covers. "
-                 + "Fills holes in large scenes but leaves a dark fringe around objects floating in "
-                 + "space. Runtime toggleable.")]
-        private bool m_surfelLessTextureSplatsEnabled = false;
-
-        /// <summary>
-        /// Whether Shark renders textured gaussians on pixels no surfel
-        /// covers. Takes effect on the next frame.
-        /// </summary>
-        public bool SurfelLessTextureSplatsEnabled => m_surfelLessTextureSplatsEnabled;
 
         /// <summary>
         /// Raised whenever the effective viewer key changes (Initialize(), SetViewerKey(), or an
@@ -219,12 +194,26 @@ namespace Miris.Runtime
         /// </summary>
         public event Action<SceneChangeTracker.Changes> SceneChangesDrained;
 
-        /// <summary>
-        /// Raised when the controller has built a new streaming client: on enable, and again each
-        /// time the renderer restarts, which replaces the client. Raised before any stream loads,
-        /// so client-side state such as the server ENV can be re-applied to the new client.
-        /// </summary>
-        public event Action ClientInitialized;
+        internal bool fadeLargeSplats
+        {
+            get
+            {
+                foreach (MirisAssetRenderComponent renderComponent in GetRenderComponents())
+                {
+                    return renderComponent.m_fadeLargeSplats;
+                }
+
+                return false;
+            }
+
+            set
+            {
+                foreach (MirisAssetRenderComponent renderComponent in GetRenderComponents())
+                {
+                    renderComponent.m_fadeLargeSplats = value;
+                }
+            }
+        }
 
         public List<Action> m_onMetadataLoadedActions = new List<Action>();
 
@@ -233,6 +222,15 @@ namespace Miris.Runtime
         // --------------------------------------------------------------------
         // Public API
         // --------------------------------------------------------------------
+
+        public List<MirisAssetRenderComponent> GetRenderComponents()
+        {
+            List<MirisAssetRenderComponent> renderComponents = m_streamToSceneObjectId.Keys
+                .SelectMany(stream => stream.GetRenderComponents())
+                .ToList();
+
+            return renderComponents;
+        }
 
         public Client GetClient()
         {
@@ -256,10 +254,34 @@ namespace Miris.Runtime
         }
 
         /// <summary>
+        /// Chooses the renderer. On a running controller the switch itself lands on the next
+        /// LateUpdate rather than here, so <see cref="Backend"/> still reports the old one until
+        /// then, and every loaded asset is re-streamed for the renderer taking over.
+        /// </summary>
+        public void SetRenderBackend(RenderBackend backend)
+        {
+            if (backend == m_renderBackend)
+            {
+                m_pendingRenderBackend = null;
+                return;
+            }
+
+            // Nothing to switch: Initialize applies whatever the field holds when it builds the
+            // client, and in edit mode IsSharkActive is false for either value.
+            if (m_client == null || IsEditMode)
+            {
+                StoreBackend(backend);
+                return;
+            }
+
+            m_pendingRenderBackend = backend;
+        }
+
+        /// <summary>
         /// Sets <see cref="NativeRenderScale"/>, clamped to [<see cref="MinNativeRenderScale"/>, 1].
         /// The native renderer's resolution is fixed once it is up, so on a controller already
         /// rendering natively this restarts it on the next LateUpdate and re-streams every loaded
-        /// asset.
+        /// asset, as <see cref="SetRenderBackend"/> does.
         /// </summary>
         public void SetNativeRenderScale(float scale)
         {
@@ -281,8 +303,8 @@ namespace Miris.Runtime
 
         /// <summary>
         /// Sets <see cref="SurfelMsaaEnabled"/>. On a running controller this restarts the native
-        /// renderer and re-streams every loaded asset - the sample count is fixed for the life of
-        /// the renderer, not a per-frame value.
+        /// renderer and re-streams every loaded asset, same as <see cref="SetRenderBackend"/> -
+        /// the sample count is fixed for the life of the renderer, not a per-frame value.
         /// </summary>
         public void SetSurfelMsaaEnabled(bool enabled)
         {
@@ -292,7 +314,7 @@ namespace Miris.Runtime
                 return;
             }
 
-            if (m_client == null || !IsSharkActive)
+            if (m_client == null || IsEditMode)
             {
                 m_surfelMsaaEnabled = enabled;
                 m_appliedSurfelMsaaEnabled = enabled;
@@ -300,15 +322,6 @@ namespace Miris.Runtime
             }
 
             m_pendingSurfelMsaaEnabled = enabled;
-        }
-
-        /// <summary>
-        /// Sets <see cref="SurfelLessTextureSplatsEnabled"/>. Unlike <see cref="SetSurfelMsaaEnabled"/>
-        /// this needs no restart.
-        /// </summary>
-        public void SetSurfelLessTextureSplatsEnabled(bool enabled)
-        {
-            m_surfelLessTextureSplatsEnabled = enabled;
         }
 
         private void ApplyPendingSurfelMsaaEnabled()
@@ -321,12 +334,39 @@ namespace Miris.Runtime
             m_surfelMsaaEnabled = m_pendingSurfelMsaaEnabled.Value;
             m_appliedSurfelMsaaEnabled = m_surfelMsaaEnabled;
             m_pendingSurfelMsaaEnabled = null;
-            if (IsSharkActive)
+            if (IsSharkActive && m_pendingRenderBackend == null)
             {
-                RestartRenderer();
+                SwitchBackend(m_renderBackend);
             }
         }
 
+        private void ApplyPendingRenderBackend()
+        {
+            if (m_pendingRenderBackend == null)
+            {
+                return;
+            }
+
+            RenderBackend backend = m_pendingRenderBackend.Value;
+            m_pendingRenderBackend = null;
+            if (backend == m_renderBackend)
+            {
+                return;
+            }
+
+            if (backend == RenderBackend.Native && !SharkSplatRenderSystem.IsSupported)
+            {
+                Debug.LogError($"{nameof(MirisStreamController)}: this build has no native splat "
+                               + $"renderer, staying on {nameof(RenderBackend.Unity)}");
+                return;
+            }
+
+            // Before Initialize, which activates Shark from this field and falls back on its own if
+            // Shark refuses.
+            SwitchBackend(backend);
+        }
+
+        // Before ApplyPendingRenderBackend: a backend switch restarts anyway, and picks the new scale up.
         private void ApplyPendingNativeRenderScale()
         {
             if (m_pendingNativeRenderScale == null)
@@ -336,18 +376,25 @@ namespace Miris.Runtime
 
             m_nativeRenderScale = m_pendingNativeRenderScale.Value;
             m_pendingNativeRenderScale = null;
-            if (IsSharkActive)
+            if (IsSharkActive && m_pendingRenderBackend == null)
             {
-                RestartRenderer();
+                SwitchBackend(m_renderBackend);
             }
         }
 
-        // The whole client, not just the streams: Shark adopts the client, and every loaded asset is
-        // streamed again for the renderer that comes back up.
-        private void RestartRenderer()
+        // The whole client, not just the streams: handing an asset to the other renderer means
+        // streaming it again either way, and Initialize is what re-applies the encoding profile.
+        private void SwitchBackend(RenderBackend backend)
         {
+            StoreBackend(backend);
             Teardown();
             Initialize();
+        }
+
+        private void StoreBackend(RenderBackend backend)
+        {
+            m_renderBackend = backend;
+            m_appliedRenderBackend = backend;
         }
 
         /// <summary>
@@ -357,14 +404,19 @@ namespace Miris.Runtime
         internal IEnumerable<MirisStream> Streams => m_streamToSceneObjectId.Keys;
 
         /// <summary>
-        /// Whether a MirisStream may add its asset yet: once native confirms it has adopted the
-        /// client, and never where Shark is unavailable, since nothing would draw it.
+        /// Whether a MirisStream may add its asset yet.
+        ///
+        /// Under Shark this is false until native confirms it has adopted the client.
         /// </summary>
         internal bool IsReadyForStreams()
         {
-            if (m_client == null || !IsSharkActive)
+            if (m_client == null)
             {
                 return false;
+            }
+            if (!IsSharkActive)
+            {
+                return true;
             }
             return SharkSplatRenderSystem.m_instance.IsAdopted;
         }
@@ -383,13 +435,6 @@ namespace Miris.Runtime
             {
                 frameTimeMs = effectiveMs;
             }
-            // Edit mode ticks only when something changes, so the time since the last tick says
-            // nothing about how fast the editor draws - and read as a frame time, it starves the
-            // budget. Report the target instead.
-            if (IsEditMode)
-            {
-                frameTimeMs = 1000.0 / m_runtimeSettings.m_targetFramesPerSecond;
-            }
             m_context.BeginFrame(frameTimeMs);
             m_runtimeSettings.m_xrModeActive = isXR;
             m_client.SetRuntimeSettings(m_runtimeSettings);
@@ -404,6 +449,10 @@ namespace Miris.Runtime
             // Update flags.
             m_updateRenderableObjects = true;
             m_loadedMetadata = false;
+
+            // Before the scene object exists, so the render components Populate creates are built
+            // suppressed rather than registering with the SDK renderer and being unregistered again.
+            stream.RenderedExternally = IsSharkActive;
 
             SceneObject streamObject = m_scene.AddStream(stream.name, url, doNotRefine: IsEditMode);
 
@@ -428,6 +477,9 @@ namespace Miris.Runtime
             // Update flags.
             m_updateRenderableObjects = true;
             m_loadedMetadata = false;
+
+            // See AddStream: set before the render components exist, not after.
+            stream.RenderedExternally = IsSharkActive;
 
             SceneObject streamObject = m_scene.AddStreamById(stream.name, uuid, doNotRefine: IsEditMode);
 
@@ -483,6 +535,9 @@ namespace Miris.Runtime
 
         internal void RemoveStream(MirisStream stream)
         {
+            // Stop associated coroutines (like fades)
+            stream.StopAllCoroutines();
+
             // Delete Stream object's entries from look-up tables
             if (m_streamToSceneObjectId.TryGetValue(stream, out int streamObjectId))
             {
@@ -503,7 +558,6 @@ namespace Miris.Runtime
             // Finally, delete underlying stream object, and un-assign from Miris Stream component.
             m_scene.RemoveStream(stream.m_sceneObject);
             stream.m_sceneObject = null;
-            stream.m_status = StreamStatus.Unknown;
         }
 
         public bool IsActive()
@@ -555,7 +609,8 @@ namespace Miris.Runtime
 
 
                     // Send updates to internal scene
-                    SyncStreamingCamera();
+                    Debug.Assert(Camera.main != null, "Scene must have a main camera");
+                    m_scene.SetMainCameraTransform(Camera.main.transform.localToWorldMatrix);
                     foreach (MirisStream stream in m_streamToSceneObjectId.Keys)
                     {
                         stream.m_sceneObject.SetTransform(stream.transform.localToWorldMatrix);
@@ -564,14 +619,16 @@ namespace Miris.Runtime
                     SceneChangeTracker.Changes changes = changeTracker.GetSceneChanges();
                     Populate(changes.m_changeIds.createdObjectIds);
                     SetObjectsDirty(changes.m_changeIds.modifiedObjectIds, changes.m_changeIds.modifiedObjectFlags);
-                    RemoveDeletedObjects(changes.m_changeIds.deletedObjectIds);
-                    UpdateRenderableObjects();
 
-                    foreach (MirisStream stream in m_streamToSceneObjectId.Keys)
+                    HashSet<int> createdObjectIdsSet = new HashSet<int>();
+                    foreach (var createdId in changes.m_changeIds.createdObjectIds)
                     {
-                        stream.m_status = m_scene.GetStreamStatus(stream.m_sceneObject);
+                        createdObjectIdsSet.Add(createdId);
                     }
 
+                    SetObjectsActiveState(changes.m_changeIds.activatedObjectIds, changes.m_changeIds.deactivatedObjectIds, createdObjectIdsSet);
+                    RemoveDeletedObjects(changes.m_changeIds.deletedObjectIds);
+                    UpdateRenderableObjects();
                     // After this controller's own bookkeeping, while the lock is still held and
                     // before the arrays are freed. See SceneChangesDrained.
                     SceneChangesDrained?.Invoke(changes);
@@ -619,6 +676,18 @@ namespace Miris.Runtime
 
 
         // --------------------------------------------------------------------
+        // Control temporary stall of render culling
+        // -------------------------------------------------------------------- 
+        internal void ToggleRenderComponentCulling()
+        {
+            List<MirisAssetRenderComponent> renderComponents = GetRenderComponents();
+            foreach (MirisAssetRenderComponent renderComponent in renderComponents)
+            {
+                renderComponent.ToggleCulling();
+            }
+        }
+
+        // --------------------------------------------------------------------
         // Scene object population
         // --------------------------------------------------------------------
         private void Populate(Span<int> createdObjectIds)
@@ -654,6 +723,7 @@ namespace Miris.Runtime
                     int streamObjectId = m_streamObjectIdToMirisStream.First(kv => m_scene.GetSceneObject(kv.Key).IsAncestorOf(sceneObjectId)).Key;
 
                     MirisAssetDataSource data = new();
+                    data.m_opacity = 0.0f;
                     data.m_object = sceneObject;
                     data.m_ancestorSceneObjectId = streamObjectId;
                     m_splatObjectIdToDataSource.Add(sceneObjectId, data);
@@ -666,7 +736,6 @@ namespace Miris.Runtime
                             break;
                         }
                     }
-                    m_updateRenderableObjects = true;
                 }
             }
         }
@@ -735,8 +804,86 @@ namespace Miris.Runtime
                     }
                 }
 
+                // We have no safe way to resolve the owning stream for an id whose native scene
+                // object no longer exists, so just stop tracking the coroutine handle. If the fade
+                // is still running it completes harmlessly against the now-orphaned data source.
+                m_fadeCoroutines.Remove(sceneObjectId);
+
                 m_updateRenderableObjects = true;
             }
+        }
+
+        // --------------------------------------------------------------------
+        // Scene object active state management
+        // --------------------------------------------------------------------
+        private void SetObjectsActiveState(Span<int> activeObjectIds, Span<int> deactivatedObjectIds, HashSet<int> createdObjectIdsSet)
+        {
+            foreach (int sceneObjectId in activeObjectIds)
+            {
+                SceneObjectType sceneObjectType = m_scene.GetSceneObject(sceneObjectId).GetSceneObjectType();
+                if (sceneObjectType == SceneObjectType.GaussianSplats)
+                {
+                    MirisStream stream = m_streamObjectIdToMirisStream.First(kv => m_scene.GetSceneObject(kv.Key).IsAncestorOf(sceneObjectId)).Value;
+                    StopFade(sceneObjectId, stream);
+                    MirisAssetDataSource dataSource = m_splatObjectIdToDataSource[sceneObjectId];
+                    m_fadeCoroutines[sceneObjectId] = stream.StartCoroutine(FadeIn(dataSource));
+                }
+            }
+
+            foreach (int sceneObjectId in deactivatedObjectIds)
+            {
+                SceneObjectType sceneObjectType = m_scene.GetSceneObject(sceneObjectId).GetSceneObjectType();
+                if (sceneObjectType == SceneObjectType.GaussianSplats)
+                {
+                    MirisAssetDataSource dataSource = m_splatObjectIdToDataSource[sceneObjectId];
+                    if (createdObjectIdsSet.Contains(sceneObjectId))
+                    {
+                        // If it was a newly created object that is starting out disabled, simply set its active state without fade out.
+                        dataSource.m_active = false;
+                        m_updateRenderableObjects = true;
+                    }
+                    else
+                    {
+                        // Otherwise, start the fade out
+                        MirisStream stream = m_streamObjectIdToMirisStream.First(kv => m_scene.GetSceneObject(kv.Key).IsAncestorOf(sceneObjectId)).Value;
+                        StopFade(sceneObjectId, stream);
+                        m_fadeCoroutines[sceneObjectId] = stream.StartCoroutine(FadeOut(dataSource));
+                    }
+                }
+            }
+        }
+
+        /// Widest span of per-object LOD depths across every live data source. Leaves the range
+        /// untouched when nothing is loaded yet, so the caller keeps whatever it started with.
+        private void GetLodIndexRangeFromDataSources(ref int minLodIndex, ref int maxLodIndex)
+        {
+            int lowest = int.MaxValue;
+            int highest = int.MinValue;
+
+            foreach (List<MirisAssetDataSource> dataSources in m_modelRootObjectIdToDataSources.Values)
+            {
+                foreach (MirisAssetDataSource dataSource in dataSources)
+                {
+                    if (dataSource == null || !dataSource.IsValid())
+                    {
+                        continue;
+                    }
+
+                    int lodIndex = dataSource.GetLodIndex();
+                    lowest = Math.Min(lowest, lodIndex);
+                    highest = Math.Max(highest, lodIndex);
+                }
+            }
+
+            if (lowest > highest)
+            {
+                minLodIndex = MirisAssetRenderComponent.DefaultLodHeatMapMinLodIndex;
+                maxLodIndex = MirisAssetRenderComponent.DefaultLodHeatMapMaxLodIndex;
+                return;
+            }
+
+            minLodIndex = lowest;
+            maxLodIndex = highest;
         }
 
         // --------------------------------------------------------------------
@@ -747,6 +894,12 @@ namespace Miris.Runtime
             if (!m_updateRenderableObjects)
             {
                 return;
+            }
+
+            m_scene.GetLodMinMaxIndices(out int minLodIndex, out int maxLodIndex);
+            if (minLodIndex == maxLodIndex)
+            {
+                GetLodIndexRangeFromDataSources(ref minLodIndex, ref maxLodIndex);
             }
 
             // Update the data sources of each render component.
@@ -767,10 +920,68 @@ namespace Miris.Runtime
                     }
 
                     renderComponent.m_dataSources = dataSources.ToArray();
+                    renderComponent.m_lodHeatMapMinLodIndex = minLodIndex;
+                    renderComponent.m_lodHeatMapMaxLodIndex = maxLodIndex;
                 }
             }
 
             m_updateRenderableObjects = false;
+        }
+
+        private IEnumerator FadeIn(MirisAssetDataSource dataSource)
+        {
+            float fadeDuration = m_fadeDurationSeconds;
+            dataSource.m_active = true;
+            m_updateRenderableObjects = true;
+
+            if (fadeDuration > 0.0)
+            {
+                while (dataSource.m_opacity < 1.0)
+                {
+                    float timeFactor = Time.deltaTime / fadeDuration;
+                    dataSource.m_opacity += timeFactor;
+                    dataSource.m_opacity = Math.Min(dataSource.m_opacity, 1.0f);
+                    yield return null;
+                }
+            }
+            else
+            {
+                dataSource.m_opacity = 1.0f;
+            }
+        }
+
+        private IEnumerator FadeOut(MirisAssetDataSource dataSource)
+        {
+            float fadeDuration = m_fadeDurationSeconds;
+            dataSource.m_active = true;
+            if (fadeDuration > 0.0)
+            {
+                while (dataSource.m_opacity > 0.0)
+                {
+                    float timeFactor = Time.deltaTime / fadeDuration;
+                    dataSource.m_opacity -= timeFactor;
+                    dataSource.m_opacity = Math.Max(dataSource.m_opacity, 0.0f);
+                    yield return null;
+                }
+            }
+            else
+            {
+                dataSource.m_opacity = 0.0f;
+            }
+
+            dataSource.m_active = false;
+            m_updateRenderableObjects = true;
+        }
+
+        private void StopFade(int sceneObjectId, MirisStream stream)
+        {
+            if (m_fadeCoroutines.TryGetValue(sceneObjectId, out Coroutine coroutine))
+            {
+                if (coroutine != null)
+                {
+                    stream.StopCoroutine(coroutine);
+                }
+            }
         }
 
         // --------------------------------------------------------------------
@@ -807,42 +1018,26 @@ namespace Miris.Runtime
 
             PreparePersistentDataDir(m_client);
 
-            m_sharkUnavailableReason = GetSharkUnavailableReason();
-            if (m_sharkUnavailableReason != null)
+            // IsSupported before Activate, which only reserves Shark's single context and succeeds
+            // even where the renderer cannot be created - committing the streams below to an
+            // encoding the SDK's renderer cannot read, a frame before TickRenderBackend finds out.
+            // Activate itself is refused when another controller already holds the context.
+            if (IsSharkActive
+                && (!SharkSplatRenderSystem.IsSupported
+                    || !SharkSplatRenderSystem.m_instance.Activate(this)))
             {
-                Debug.LogError($"{nameof(MirisStreamController)}: splats will not render - "
-                               + m_sharkUnavailableReason);
+                Debug.LogWarning($"{nameof(MirisStreamController)}: {nameof(RenderBackend.Native)} is not "
+                                 + $"available here - using {nameof(RenderBackend.Unity)}");
+                m_renderBackend = RenderBackend.Unity;
             }
 
-            // Before any MirisStream loads - the profile is fixed per asset at load.
-            Client.SetPreferSharkEncodingProfiles(true);
+            // After the fallback above, so the stream format matches the renderer that actually came
+            // up, and before any MirisStream loads - the profile is fixed per asset at load.
+            Client.SetPreferSharkEncodingProfiles(IsSharkActive);
 
+            // Catches a value restored from the scene or prefab, which SetRenderBackend never saw.
+            m_appliedRenderBackend = m_renderBackend;
             m_appliedSurfelMsaaEnabled = m_surfelMsaaEnabled;
-
-            ClientInitialized?.Invoke();
-        }
-
-        // IsSupported and the pipeline before Activate, which only reserves Shark's single context and
-        // succeeds even where the renderer cannot be created.
-        private string GetSharkUnavailableReason()
-        {
-            if (!SharkSplatRenderSystem.IsSupported)
-            {
-                return "this platform has no native splat renderer (Shark runs on Apple platforms only)";
-            }
-            if (GraphicsSettings.currentRenderPipeline != null)
-            {
-                return "Shark does not support scriptable render pipelines such as URP yet";
-            }
-            if (m_sharkFailed)
-            {
-                return "Shark could not be brought up; re-enable the controller to retry";
-            }
-            if (!SharkSplatRenderSystem.m_instance.Activate(this))
-            {
-                return "another MirisStreamController already holds the native splat renderer";
-            }
-            return null;
         }
 
         private void ApplyViewerKey()
@@ -896,8 +1091,9 @@ namespace Miris.Runtime
         private void Teardown()
         {
             // Before the streams and the client go: Shark holds a handler on SceneChangesDrained and
-            // a native context built around this client.
-            SharkSplatRenderSystem.m_instance.Deactivate(this);
+            // a native context built around this client, and it un-suppresses the streams on the way
+            // out so they are not left invisible to both renderers.
+            SharkSplatRenderSystem.m_instance.Deactivate();
 
             // Normal cleanup path for non-quit scenarios (e.g., scene changes, disabling in editor)
             MirisStream[] streams = m_streamToSceneObjectId.Keys.ToArray();
@@ -909,6 +1105,7 @@ namespace Miris.Runtime
 
             m_streamToSceneObjectId.Clear();
             m_splatObjectIdToDataSource.Clear();
+            m_fadeCoroutines.Clear();
             m_clientConfig = null;
 
             m_scene?.Clear();
@@ -933,7 +1130,6 @@ namespace Miris.Runtime
 
         protected void OnEnable()
         {
-            m_sharkFailed = false;
             Initialize();
         }
 
@@ -950,8 +1146,17 @@ namespace Miris.Runtime
             m_viewerKey = NormalizeViewerKey(m_viewerKey);
             ApplyViewerKey();
 
-            // An Inspector edit during Play mode would otherwise leave the running native renderer
-            // at whatever sample count it was created with.
+            // An Inspector edit moves the field on its own, which would leave it naming one
+            // renderer while the other is still the one wired up.
+            if (m_renderBackend != m_appliedRenderBackend)
+            {
+                RenderBackend requested = m_renderBackend;
+                m_renderBackend = m_appliedRenderBackend;
+                SetRenderBackend(requested);
+            }
+
+            // Same reasoning: an Inspector edit during Play mode would otherwise leave the running
+            // native renderer at whatever sample count it was created with.
             if (m_surfelMsaaEnabled != m_appliedSurfelMsaaEnabled)
             {
                 bool requested = m_surfelMsaaEnabled;
@@ -963,53 +1168,15 @@ namespace Miris.Runtime
         protected void Start()
         {
             // Initialize client & scene state
-            SyncStreamingCamera();
-        }
-
-        // Hands the client the camera it chooses detail and budget for. Without one, which in edit
-        // mode is just a scene nobody has tagged yet, it warns once rather than fail every frame.
-        private void SyncStreamingCamera()
-        {
-            Camera camera = StreamingCamera();
-            if (camera == null)
-            {
-                if (!m_warnedNoMainCamera)
-                {
-                    Debug.LogWarning($"{nameof(MirisStreamController)}: no camera is tagged MainCamera, "
-                                     + "so streaming has nothing to choose detail for");
-                    m_warnedNoMainCamera = true;
-                }
-                return;
-            }
-
-            // Every sync, not once: a resized view or a changed FOV or clip plane is a new frustum, and
-            // the client ignores one that has not changed.
-            m_scene.SetMainCameraTransform(camera.transform.localToWorldMatrix);
-            m_scene.SetMainCameraViewFrustum(camera);
-        }
-
-        // With Shark in edit mode, the Scene view the user is working in rather than a Game camera
-        // they are not looking at.
-        private Camera StreamingCamera()
-        {
-            Camera mainCamera = Camera.main;
-#if UNITY_EDITOR
-            if (IsEditMode && IsSharkActive)
-            {
-                UnityEditor.SceneView sceneView = UnityEditor.SceneView.lastActiveSceneView;
-                if (sceneView != null && sceneView.camera != null && (mainCamera == null || sceneView.hasFocus))
-                {
-                    return sceneView.camera;
-                }
-            }
-#endif
-            return mainCamera;
+            m_scene.SetMainCameraTransform(Camera.main.transform.localToWorldMatrix);
+            m_scene.SetMainCameraViewFrustum(Camera.main);
         }
 
         protected void LateUpdate()
         {
             ApplyPendingNativeRenderScale();
             ApplyPendingSurfelMsaaEnabled();
+            ApplyPendingRenderBackend();
             TickRenderBackend();
             SyncClientParameters();
             SyncScene();
@@ -1025,14 +1192,16 @@ namespace Miris.Runtime
             }
 
             SharkSplatRenderSystem.m_instance.SurfelMsaaEnabled = m_surfelMsaaEnabled;
-            SharkSplatRenderSystem.m_instance.SurfelLessTextureSplatsEnabled = m_surfelLessTextureSplatsEnabled;
-            SharkSplatRenderSystem.m_instance.OutputOpacity = m_outputOpacity;
             SharkSplatRenderSystem.m_instance.Tick();
             if (SharkSplatRenderSystem.m_instance.Failed)
             {
-                // The restart drops the streams already loaded, which nothing would draw.
-                m_sharkFailed = true;
-                RestartRenderer();
+                Debug.LogError($"{nameof(MirisStreamController)}: Shark could not be brought up - falling "
+                               + $"back to {nameof(RenderBackend.Unity)}");
+                SharkSplatRenderSystem.m_instance.Deactivate();
+
+                // Not just StoreBackend: the assets already streamed in Shark's encoding, which the
+                // SDK's renderer cannot read.
+                SwitchBackend(RenderBackend.Unity);
             }
         }
     }
