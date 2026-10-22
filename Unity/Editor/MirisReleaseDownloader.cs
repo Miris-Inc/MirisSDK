@@ -50,7 +50,7 @@ namespace Miris.Editor
         // Config for fetching repo
         private static readonly string artifactName = "UnitySDK";
         private static string owner = "miris-inc";
-        private static string repo = "MirisSDK";
+        private static string repo = "miris-unity-sdk";
         private static string tag = $"{artifactName}@v0.0.9";
         private static string githubToken = ""; // optional
         private static bool hideToken = true;
