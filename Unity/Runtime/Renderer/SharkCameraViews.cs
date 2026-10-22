@@ -10,7 +10,8 @@ namespace Miris.Runtime
     // Draws Shark into each camera on its own - the editor's Scene views and the Game view - where
     // SharkSplatRenderSystem's frame path draws one camera's views together. Each camera gets its
     // own native view, sorted from that camera, rendered as the camera culls and composited by a
-    // CommandBuffer on the camera, so the camera shows this frame's render.
+    // CommandBuffer on the camera, so the camera shows this frame's render. Under URP, where camera
+    // CommandBuffers never run, the composite is drawn by SharkUniversalCompositePass instead.
     //
     // Every view renders at the one native size, whatever the camera's aspect: the composite maps
     // the camera's own projection onto the whole texture, so a wide Scene view samples it
@@ -34,6 +35,8 @@ namespace Miris.Runtime
             // On the camera, compositing the slot Render wrote.
             public CommandBuffer Composite;
             public MaterialPropertyBlock Properties;
+            // Whether Properties holds a rendered slot to composite this frame.
+            public bool HasComposite;
             public Matrix4x4 LastView;
             public Matrix4x4 LastProjection;
         }
@@ -73,7 +76,9 @@ namespace Miris.Runtime
             m_mesh = mesh;
             m_material = material;
             m_renderEventCallback = SplatRendererBridge.AquaSplatRenderer_GetRenderEventCallbackPtr();
+            // Exactly one of these fires, depending on the active render pipeline.
             Camera.onPreCull += OnPreCull;
+            RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
         }
 
         // Before the native shutdown event: a CommandBuffer left on a camera would go on issuing view
@@ -85,6 +90,7 @@ namespace Miris.Runtime
                 return;
             }
             Camera.onPreCull -= OnPreCull;
+            RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
             foreach (KeyValuePair<Camera, CameraView> entry in m_views)
             {
                 if (entry.Key != null)
@@ -145,9 +151,31 @@ namespace Miris.Runtime
             return SplatRendererBridge.AquaSplatRenderer_GetViewRenderCount(m_renderer, view.Index);
         }
 
+        // What to draw over `camera` this frame: the composite mesh and material, sampling the slot
+        // its view last rendered. False until that view has rendered once.
+        internal bool TryGetComposite(Camera camera, out Mesh mesh, out Material material,
+                                      out MaterialPropertyBlock properties)
+        {
+            mesh = m_mesh;
+            material = m_material;
+            properties = null;
+            if (!IsActive || camera == null || !m_views.TryGetValue(camera, out CameraView view)
+                || !view.HasComposite)
+            {
+                return false;
+            }
+            properties = view.Properties;
+            return true;
+        }
+
         static bool DrawsInto(Camera camera)
         {
             return camera.cameraType == CameraType.SceneView || camera == Camera.main;
+        }
+
+        void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera)
+        {
+            OnPreCull(camera);
         }
 
         void OnPreCull(Camera camera)
@@ -192,7 +220,8 @@ namespace Miris.Runtime
 
             // Not until the view has rendered once: before that, its surfaces hold nothing to show.
             view.Composite.Clear();
-            if (SplatRendererBridge.AquaSplatRenderer_GetViewRenderCount(m_renderer, view.Index) > 0)
+            view.HasComposite = SplatRendererBridge.AquaSplatRenderer_GetViewRenderCount(m_renderer, view.Index) > 0;
+            if (view.HasComposite)
             {
                 view.Properties.SetTexture("_LeftTex", view.Slots[view.Slot]);
                 view.Properties.SetFloat("_OutputOpacity", OutputOpacity);
