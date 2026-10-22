@@ -7,9 +7,9 @@ Welcome to the Miris Unity Integration for spatial streaming.
 ## Requirements
 
 <!--END_MDX_STRIP-->
-Your Unity project must be using Unity 6000.0.58f2 or newer, with the built-in render pipeline.
+Your Unity project must be using Unity 6000.0.58f2 or newer, with the built-in render pipeline or URP. On Unity 6000.0 to 6000.3, URP's Compatibility Mode must be off for proper rendering in the Scene and Game views in the editor.
 
-Splats currently render on Apple platforms only. On other platforms, and in URP projects, the `Miris Stream Controller` logs an error and renders nothing.
+Assets currently render on Apple platforms only. On other platforms, and under any other render pipeline, the `Miris Stream Controller` logs an error and renders nothing.
 
 For desktop hosts, the system requirements are below:
 
@@ -33,7 +33,7 @@ For deployments targeting specific devices, the minimum system requirements are 
     ![](img/package_manager_1.png)
     * Use the "+" button to `Install git package from url...`
     ![](img/package_manager_2.png)
-    * Paste the following into the git URL field to download the latest SDK, then click the install button: `https://github.com/Miris-Inc/MirisSDK.git?path=Unity#latest`
+    * Paste the following into the git URL field to download the latest SDK, then click the install button: `https://github.com/Miris-Inc/miris-unity-sdk.git?path=Unity#latest`
     ![](img/package_manager_3.png)
 
 3. The Miris SDK will need to install the native libraries it uses into the `Assets/Plugins/Miris` folder. If this folder does not contain platform folders with libraries inside, you will need to download them via the in editor tool. 
