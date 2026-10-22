@@ -102,7 +102,7 @@ namespace Miris.Runtime
 
         public void BeginFrame(double previousFrameTimeMs)
         {
-            MirisBindings.BeginFrame(m_handle, previousFrameTimeMs);
+            MirisBindings.BeginFrame(m_handle, previousFrameTimeMs, 0, 0);
         }
     }
 }
