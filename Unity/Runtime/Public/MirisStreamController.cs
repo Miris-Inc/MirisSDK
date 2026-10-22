@@ -830,9 +830,10 @@ namespace Miris.Runtime
             {
                 return "this platform has no native splat renderer (Shark runs on Apple platforms only)";
             }
-            if (GraphicsSettings.currentRenderPipeline != null)
+            if (!SharkSplatRenderSystem.SupportsRenderPipeline(GraphicsSettings.currentRenderPipeline))
             {
-                return "Shark does not support scriptable render pipelines such as URP yet";
+                return "Shark supports the built-in render pipeline and URP only, not "
+                       + GraphicsSettings.currentRenderPipeline.GetType().Name;
             }
             if (m_sharkFailed)
             {
