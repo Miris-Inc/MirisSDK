@@ -9,8 +9,8 @@ using UnityEngine.XR;
 namespace Miris.Runtime
 {
 
-    // Draws a MirisStreamController's streams with the native Shark renderer, compositing what
-    // Shark rasterizes over the camera.
+    // Draws a MirisStreamController's streams with the native Shark renderer instead of
+    // MirisAssetRenderSystem, compositing what Shark rasterizes over the camera.
     //
     // Shark owns a single process-wide context, so there is one of these and one controller may
     // drive it at a time. The controller owns the lifecycle: Activate on initialize, Tick every
@@ -50,8 +50,8 @@ namespace Miris.Runtime
         MirisStreamController m_controller;
 
         // Set when native could not be brought up - the usual cause being a build without the shark
-        // feature, whose Create stub returns -1. The controller polls this and stops streaming, since
-        // nothing else can draw its splats.
+        // feature, whose Create stub returns -1. The controller polls this and falls back to its own
+        // renderer rather than leaving the scene blank.
         bool m_failed;
 
         // Whether native has confirmed it holds the controller's client. Streams are held back until
@@ -81,10 +81,8 @@ namespace Miris.Runtime
         // tears intermittently rather than failing.
         int m_ringDepth = 1;
 
-        // On the frame path, the camera the compositor presents and the source of the per-view
-        // matrices; in stereo the two views are its two eyes, matrices on one camera rather than two
-        // cameras. The per-camera path only takes its starting size from it, and in edit mode may
-        // have none.
+        // The camera the compositor presents, and the source of the per-view matrices. In stereo
+        // the two views are its two eyes, which are matrices on one camera rather than two cameras.
         Camera m_camera;
         bool m_isStereo;
         int m_cameraWaitFrames;
@@ -98,28 +96,13 @@ namespace Miris.Runtime
         // controller asked for a scale under 1 and this device supports it.
         bool m_upscale;
         float m_renderScale;
-        float m_overscan;
         int m_renderSizeWaitFrames;
 
         int m_renderer = -1;
         Texture2D[] m_sharedTextures;
         CommandBuffer m_commandBuffer;
         GameObject m_quad;
-        Mesh m_compositeMesh;
         Material m_quadMaterial;
-
-        // In the editor, outside stereo, every camera that shows the scene is drawn on its own
-        // instead - see SharkCameraViews. Decided with the camera, in ResolveCamera.
-        readonly SharkCameraViews m_cameraViews = new();
-        bool m_perCameraViews;
-
-        // The size to start at in edit mode with no Game camera; SharkCameraViews grows it as the
-        // Scene views render.
-        const int EditModeInitialSize = 256;
-
-        // Set when what the cameras should show has changed, for the edit-mode pump.
-        bool m_contentChanged;
-        readonly EditModeRepaintPolicy m_repaintPolicy = new();
 
         // Reused every frame so StageViews does not allocate at frame rate.
         readonly float[] m_viewMatrix = new float[16];
@@ -160,31 +143,20 @@ namespace Miris.Runtime
             }
         }
 
-        // Whether native could not be brought up, so the controller can stop streaming for it.
+        // Whether native could not be brought up, so the controller can fall back to its own renderer.
         internal bool Failed => m_failed;
 
         // Whether Shark is ready to receive a stream. MirisStream waits on this through
         // MirisStreamController.IsReadyForStreams.
         internal bool IsAdopted => m_adopted;
 
-        // For tests - see SharkCameraViews.RenderCount.
-        internal int CameraRenderCount(Camera camera) => m_cameraViews.RenderCount(camera);
-
         // Mirrors MirisStreamController.SurfelMsaaEnabled 
         internal bool SurfelMsaaEnabled = false;
-
-        // Mirrors MirisStreamController.SurfelLessTextureSplatsEnabled. Unlike SurfelMsaaEnabled
-        // this is pushed whenever it changes; null means not yet pushed to this renderer.
-        internal bool SurfelLessTextureSplatsEnabled = false;
-        bool? m_pushedSurfelLessTextureSplatsEnabled;
-
-        // Mirrors MirisStreamController.OutputOpacity
-        internal float OutputOpacity = 1.0f;
 
         // Unity's Matrix4x4 is column-major but its mNN fields are named row-first, and the
         // shared ValueConversion.MatrixToFloatArray emits ROW-major - which is not what
         // shark_set_view_proj takes. Hence a local flatten rather than that helper.
-        internal static void ToColumnMajor(Matrix4x4 matrix, float[] result)
+        static void ToColumnMajor(Matrix4x4 matrix, float[] result)
         {
             for (int column = 0; column < 4; ++column)
             {
@@ -214,76 +186,20 @@ namespace Miris.Runtime
             m_failed = false;
 
             Application.onBeforeRender += StageViews;
-#if UNITY_EDITOR
-            UnityEditor.EditorApplication.update += PumpEditMode;
-#endif
             Debug.Log($"SharkSplatRenderSystem: activated for '{controller.name}' - asset ids and server "
                       + $"come from its MirisStreams (native renderer available: {IsSupported})");
             return true;
         }
 
-        // Releases rendering, but only for the controller that holds it: one refused by Activate
-        // still tears down, and must not take the owner's renderer with it.
-        internal void Deactivate(MirisStreamController controller)
+        internal void Deactivate()
         {
-            if (m_controller == null || m_controller != controller)
+            if (m_controller == null)
             {
                 return;
             }
             Application.onBeforeRender -= StageViews;
-#if UNITY_EDITOR
-            UnityEditor.EditorApplication.update -= PumpEditMode;
-#endif
             Teardown();
             m_controller = null;
-        }
-
-#if UNITY_EDITOR
-        // Keeps the editor ticking while Shark has something to do in edit mode. See
-        // EditModeRepaintPolicy.
-        void PumpEditMode()
-        {
-            if (Application.isPlaying)
-            {
-                return;
-            }
-            double now = UnityEditor.EditorApplication.timeSinceStartup;
-            bool cameraMoved = m_cameraViews.TakeCameraMoved();
-            if (m_contentChanged || cameraMoved)
-            {
-                m_repaintPolicy.NoteActivity(now);
-                m_contentChanged = false;
-            }
-            if (m_repaintPolicy.ShouldRepaint(now, IsWaitingOnFrames()))
-            {
-                UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
-                UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
-            }
-        }
-#endif
-
-        // Whether something only progresses on further frames: native not yet adopted, or a stream
-        // still loading its first data. Not a prefetching stream, which may legitimately stay
-        // Loading with nothing to draw.
-        bool IsWaitingOnFrames()
-        {
-            if (!m_adopted)
-            {
-                return true;
-            }
-            foreach (MirisStream stream in m_controller.Streams)
-            {
-                if (stream == null || m_controller.GetStreamFetchMode(stream) == StreamFetchMode.Prefetch)
-                {
-                    continue;
-                }
-                StreamStatus status = stream.GetStatus();
-                if (status == StreamStatus.Unknown || status == StreamStatus.Resolving || status == StreamStatus.Loading)
-                {
-                    return true;
-                }
-            }
-            return false;
         }
 
         // Driven from MirisStreamController.LateUpdate. Brings native up once the render size is
@@ -303,16 +219,6 @@ namespace Miris.Runtime
                 }
                 m_failed = !TryInitialize();
                 return;
-            }
-
-            m_cameraViews.PruneDestroyedCameras();
-            m_cameraViews.OutputOpacity = OutputOpacity;
-
-            if (m_pushedSurfelLessTextureSplatsEnabled != SurfelLessTextureSplatsEnabled)
-            {
-                m_pushedSurfelLessTextureSplatsEnabled = SurfelLessTextureSplatsEnabled;
-                SplatRendererBridge.AquaSplatRenderer_SetSurfelLessTextureSplatsEnabled(
-                    m_renderer, SurfelLessTextureSplatsEnabled ? 1 : 0);
             }
 
             if (!m_adopted)
@@ -345,8 +251,7 @@ namespace Miris.Runtime
             }
 
             m_camera = Camera.main;
-            // Edit mode needs no Game camera: it draws only per camera.
-            if (m_camera == null && !(Application.isEditor && !Application.isPlaying))
+            if (m_camera == null)
             {
                 if (++m_cameraWaitFrames % 120 == 0)
                 {
@@ -358,9 +263,8 @@ namespace Miris.Runtime
 
             // Resolved with the camera rather than at activation: XR management brings its loader up
             // asynchronously, and before it has there is nothing to ask.
-            m_isStereo = m_camera != null && XRUtils.IsXR() && HasRunningXRDisplay();
+            m_isStereo = XRUtils.IsXR() && HasRunningXRDisplay();
             m_viewCount = m_isStereo ? 2 : 1;
-            m_perCameraViews = Application.isEditor && !m_isStereo;
             return true;
         }
 
@@ -384,14 +288,12 @@ namespace Miris.Runtime
         // (1888x1792 on Vision Pro): rendering under it and letting the compositor upscale is the
         // single largest sharpness loss in the path.
         //
-        // The frame path resolves it once, up front, and never resizes; SharkCameraViews grows it from
-        // here as its cameras need.
+        // Shark's resolution is fixed at shark_create, so there is no resize short of rebuilding the
+        // render state mid-stream - hence resolving it once, up front.
         bool ResolveRenderSize(out int width, out int height)
         {
-            int drawableWidth = m_isStereo ? XRSettings.eyeTextureWidth
-                                : m_camera != null ? m_camera.pixelWidth : EditModeInitialSize;
-            int drawableHeight = m_isStereo ? XRSettings.eyeTextureHeight
-                                 : m_camera != null ? m_camera.pixelHeight : EditModeInitialSize;
+            int drawableWidth = m_isStereo ? XRSettings.eyeTextureWidth : m_camera.pixelWidth;
+            int drawableHeight = m_isStereo ? XRSettings.eyeTextureHeight : m_camera.pixelHeight;
 
             if (drawableWidth <= 0 || drawableHeight <= 0)
             {
@@ -407,17 +309,13 @@ namespace Miris.Runtime
                 return false;
             }
 
-            // Per camera, neither: an upscaler is sized to one camera, and with the composite drawn
-            // straight after its own render there is no reprojection for overscan to feed.
             float requestedScale = m_controller.NativeRenderScale;
-            m_upscale = !m_perCameraViews && m_controller.DeviceResolutionViaMetalFx && requestedScale < 1.0f
-                        && SplatRendererBridge.AquaSplatRenderer_IsUpscaleSupported() != 0;
-            m_renderScale = requestedScale;
-            m_overscan = m_perCameraViews ? 1.0f : m_controller.ReprojectionOverscan;
+            m_upscale = requestedScale < 1.0f && SplatRendererBridge.AquaSplatRenderer_IsUpscaleSupported() != 0;
+            m_renderScale = m_upscale ? requestedScale : 1.0f;
             m_outputWidth = drawableWidth;
             m_outputHeight = drawableHeight;
-            width = Mathf.Max(1, Mathf.RoundToInt(drawableWidth * m_renderScale * m_overscan));
-            height = Mathf.Max(1, Mathf.RoundToInt(drawableHeight * m_renderScale * m_overscan));
+            width = Mathf.Max(1, Mathf.RoundToInt(drawableWidth * m_renderScale));
+            height = Mathf.Max(1, Mathf.RoundToInt(drawableHeight * m_renderScale));
             return true;
         }
 
@@ -425,9 +323,7 @@ namespace Miris.Runtime
         {
             Debug.Log($"SharkSplatRenderSystem: initializing at {m_renderWidth}x{m_renderHeight} "
                       + $"({(m_upscale ? $"MetalFX upscale to {m_outputWidth}x{m_outputHeight}" : "no upscale")}, "
-                      + $"{(m_overscan > 1.0f ? $"{m_overscan}x overscan" : "no overscan")}, "
-                      + $"{(m_perCameraViews ? "per camera" : m_isStereo ? "stereo" : "mono")}, "
-                      + $"{(m_perCameraViews ? "" : $"{m_viewCount} view(s), ")}"
+                      + $"{(m_isStereo ? "stereo" : "mono")}, {m_viewCount} view(s), "
                       + $"surfel MSAA {SurfelMsaaEnabled})");
 
             m_renderer = SplatRendererBridge.AquaSplatRenderer_Create(m_renderWidth, m_renderHeight,
@@ -437,11 +333,6 @@ namespace Miris.Runtime
                 Debug.LogError("SharkSplatRenderSystem: failed to create the native renderer - a build "
                                + "without the shark feature always fails here");
                 return false;
-            }
-
-            if (m_perCameraViews)
-            {
-                return TryInitializeCameraViews();
             }
 
             m_ringDepth = Mathf.Max(1, SplatRendererBridge.AquaSplatRenderer_GetRingDepth());
@@ -498,21 +389,6 @@ namespace Miris.Runtime
             m_commandBuffer.IssuePluginEvent(SplatRendererBridge.AquaSplatRenderer_GetRenderEventCallbackPtr(),
                                              SplatRendererBridge.FrameEventId);
             m_camera.AddCommandBuffer(CameraEvent.AfterEverything, m_commandBuffer);
-            return true;
-        }
-
-        // The rest of TryInitialize for SharkCameraViews, which creates each camera's surfaces as
-        // that camera first renders.
-        bool TryInitializeCameraViews()
-        {
-            if (!AdoptControllerClient() || !BuildCompositeMaterial())
-            {
-                Teardown();
-                return false;
-            }
-            m_compositeMesh = BuildCompositeMesh();
-            m_cameraViews.Begin(m_renderer, m_renderWidth, m_renderHeight, m_renderScale, m_compositeMesh,
-                                m_quadMaterial);
             return true;
         }
 
@@ -574,7 +450,6 @@ namespace Miris.Runtime
                     {
                         m_lastModelOpacities[modelRoot.Key] = opacity;
                         SplatRendererBridge.AquaSplatRenderer_SetModelOpacity(m_renderer, modelRoot.Key, opacity);
-                        m_contentChanged = true;
                     }
 
                     // Matching MirisAssetRenderComponent.Update: the stream's Unity transform AND
@@ -591,7 +466,6 @@ namespace Miris.Runtime
                     ToColumnMajor(model.inverse, m_modelMatrixInverse);
                     SplatRendererBridge.AquaSplatRenderer_SetModelTransform(
                         m_renderer, modelRoot.Key, m_modelMatrix, m_modelMatrixInverse);
-                    m_contentChanged = true;
                 }
             }
 
@@ -628,7 +502,6 @@ namespace Miris.Runtime
                 return;
             }
 
-            m_contentChanged = true;
             int applied = SplatRendererBridge.AquaSplatRenderer_ApplySceneChanges(m_renderer, ref changes.m_changeIds);
             if (applied < 0)
             {
@@ -648,37 +521,6 @@ namespace Miris.Runtime
         // CommandBuffer.Blit.
         bool BuildComposite()
         {
-            if (!BuildCompositeMaterial())
-            {
-                return false;
-            }
-
-            m_quad = new GameObject("SharkSplatComposite") { hideFlags = HideFlags.HideAndDontSave };
-            // Its vertices ignore the transform entirely, but its BOUNDS do not: a renderer whose
-            // bounds fall outside the frustum is culled before the vertex shader ever runs. The
-            // huge bounds below make that impossible; parenting to the camera is belt and braces.
-            m_quad.transform.SetParent(m_camera.transform, false);
-            m_quad.transform.localPosition = Vector3.zero;
-            m_quad.transform.localRotation = Quaternion.identity;
-
-            m_compositeMesh = BuildCompositeMesh();
-            MeshFilter filter = m_quad.AddComponent<MeshFilter>();
-            filter.sharedMesh = m_compositeMesh;
-
-            MeshRenderer renderer = m_quad.AddComponent<MeshRenderer>();
-            renderer.shadowCastingMode = ShadowCastingMode.Off;
-            renderer.receiveShadows = false;
-            renderer.lightProbeUsage = LightProbeUsage.Off;
-            renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
-            renderer.sharedMaterial = m_quadMaterial;
-            StageCompositeTextures();
-            return true;
-        }
-
-        // The material both composites draw with. Everything the composite builds is HideAndDontSave:
-        // in edit mode the cameras it hangs off are scene objects, and none of it may be saved with them.
-        bool BuildCompositeMaterial()
-        {
             // Resources.Load rather than Shader.Find: a shader only ever reached by Shader.Find is
             // stripped from a player build.
             Shader compositeShader = Resources.Load<Shader>(CompositeShaderResource);
@@ -689,12 +531,31 @@ namespace Miris.Runtime
                 return false;
             }
 
-            m_quadMaterial = new Material(compositeShader) { hideFlags = HideFlags.HideAndDontSave };
+            m_quad = new GameObject("SharkSplatComposite");
+            // Its vertices ignore the transform entirely, but its BOUNDS do not: a renderer whose
+            // bounds fall outside the frustum is culled before the vertex shader ever runs. The
+            // huge bounds below make that impossible; parenting to the camera is belt and braces.
+            m_quad.transform.SetParent(m_camera.transform, false);
+            m_quad.transform.localPosition = Vector3.zero;
+            m_quad.transform.localRotation = Quaternion.identity;
+
+            MeshFilter filter = m_quad.AddComponent<MeshFilter>();
+            filter.sharedMesh = BuildCompositeMesh();
+
+            MeshRenderer renderer = m_quad.AddComponent<MeshRenderer>();
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            renderer.lightProbeUsage = LightProbeUsage.Off;
+            renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+
+            m_quadMaterial = new Material(compositeShader);
             m_quadMaterial.SetFloat("_VFlip", CompositeVFlip ? 1.0f : 0.0f);
             // Identity up front: an unset matrix uniform is zero, not identity, and
             // StageCompositeTextures skips any view whose slot is not ready. See BuildReprojection.
             m_quadMaterial.SetMatrix("_ReprojLeft", Matrix4x4.identity);
             m_quadMaterial.SetMatrix("_ReprojRight", Matrix4x4.identity);
+            renderer.sharedMaterial = m_quadMaterial;
+            StageCompositeTextures();
             return true;
         }
 
@@ -702,7 +563,7 @@ namespace Miris.Runtime
         // The bounds are deliberately enormous rather than the mesh's own: see BuildComposite.
         static Mesh BuildCompositeMesh()
         {
-            Mesh mesh = new Mesh { name = "SharkSplatCompositeQuad", hideFlags = HideFlags.HideAndDontSave };
+            Mesh mesh = new Mesh { name = "SharkSplatCompositeQuad" };
             mesh.vertices = new[]
             {
                 new Vector3(-1.0f, -1.0f, 0.0f),
@@ -731,7 +592,6 @@ namespace Miris.Runtime
             {
                 return;
             }
-            m_quadMaterial.SetFloat("_OutputOpacity", OutputOpacity);
             for (int view = 0; view < m_viewCount; ++view)
             {
                 int slot = SplatRendererBridge.AquaSplatRenderer_GetPresentSlot(m_renderer, view);
@@ -807,8 +667,7 @@ namespace Miris.Runtime
         // carries the default order, so it runs after the driver's.
         void StageViews()
         {
-            // SharkCameraViews stages each camera as it culls.
-            if (m_renderer < 0 || m_camera == null || m_perCameraViews)
+            if (m_renderer < 0 || m_camera == null)
             {
                 return;
             }
@@ -844,23 +703,8 @@ namespace Miris.Runtime
                     m_currentProjection[view] = projectionMatrix;
                 }
 
-                // Shark renders a wider frustum than the display shows when overscan is on, so the
-                // per-frame reprojection below (BuildReprojection) has real edge pixels to warp from
-                // on a missed vsync. Only the matrix handed to the native renderer is widened - the
-                // display's true frustum above (m_currentProjection) must stay as-is, since that is
-                // what "now" means to the reprojection math. m02/m12 contain the off-axis center for
-                // the stereo per-eye frustums
-                Matrix4x4 renderProjectionMatrix = projectionMatrix;
-                if (m_overscan > 1.0f)
-                {
-                    renderProjectionMatrix.m00 /= m_overscan;
-                    renderProjectionMatrix.m11 /= m_overscan;
-                    renderProjectionMatrix.m02 /= m_overscan;
-                    renderProjectionMatrix.m12 /= m_overscan;
-                }
-
                 ToColumnMajor(viewMatrix, m_viewMatrix);
-                ToColumnMajor(renderProjectionMatrix, m_projectionMatrix);
+                ToColumnMajor(projectionMatrix, m_projectionMatrix);
 
                 SplatRendererBridge.AquaSplatRenderer_SetView(
                     m_renderer, view, m_viewMatrix, m_projectionMatrix);
@@ -887,11 +731,20 @@ namespace Miris.Runtime
             if (m_controller != null)
             {
                 m_controller.SceneChangesDrained -= OnSceneChangesDrained;
+
+                // Hand the splats back to the SDK's renderer. Left suppressed, an already-loaded
+                // stream would be drawn by neither renderer for as long as it lives.
+                foreach (MirisStream stream in m_controller.Streams)
+                {
+                    if (stream != null)
+                    {
+                        stream.RenderedExternally = false;
+                    }
+                }
             }
 
             m_lastModelMatrices.Clear();
             m_lastModelOpacities.Clear();
-            m_pushedSurfelLessTextureSplatsEnabled = null;
             m_changesAccepted = false;
             m_adopted = false;
             m_currentPoseStaged = false;
@@ -899,26 +752,23 @@ namespace Miris.Runtime
             m_renderSizeWaitFrames = 0;
             m_cameraWaitFrames = 0;
 
-            // Its CommandBuffers draw with the composite's mesh and material.
-            m_cameraViews.End();
-
             // Before the shared textures are dropped: the material holds one, and the display
             // object is parented to the camera, which outlives this teardown.
             if (m_quad != null)
             {
-                UnityEngine.Object.DestroyImmediate(m_quad);
+                // The composite builds its own Mesh, which is not owned by the GameObject and
+                // survives it - Unity leaks meshes created from script unless they are destroyed.
+                MeshFilter filter = m_quad.GetComponent<MeshFilter>();
+                if (filter != null && filter.sharedMesh != null)
+                {
+                    UnityEngine.Object.Destroy(filter.sharedMesh);
+                }
+                UnityEngine.Object.Destroy(m_quad);
                 m_quad = null;
-            }
-            // Not owned by the GameObject, so it survives it - Unity leaks meshes created from script
-            // unless they are destroyed.
-            if (m_compositeMesh != null)
-            {
-                UnityEngine.Object.DestroyImmediate(m_compositeMesh);
-                m_compositeMesh = null;
             }
             if (m_quadMaterial != null)
             {
-                UnityEngine.Object.DestroyImmediate(m_quadMaterial);
+                UnityEngine.Object.Destroy(m_quadMaterial);
                 m_quadMaterial = null;
             }
 
@@ -935,7 +785,7 @@ namespace Miris.Runtime
                 {
                     if (m_sharedTextures[i] != null)
                     {
-                        UnityEngine.Object.DestroyImmediate(m_sharedTextures[i]);
+                        UnityEngine.Object.Destroy(m_sharedTextures[i]);
                     }
                     m_sharedTextures[i] = null;
                 }

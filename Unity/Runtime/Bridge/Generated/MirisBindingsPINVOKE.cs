@@ -591,9 +591,6 @@ class MirisBindingsPINVOKE {
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_GetStreamFetchMode___")]
   public static extern int GetStreamFetchMode(global::System.IntPtr jarg1, int jarg2);
 
-  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_GetStreamStatus___")]
-  public static extern int GetStreamStatus(global::System.IntPtr jarg1, int jarg2);
-
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_SetMainCameraTransform___")]
   public static extern int SetMainCameraTransform(global::System.IntPtr jarg1, [global::System.Runtime.InteropServices.In, global::System.Runtime.InteropServices.Out, global::System.Runtime.InteropServices.MarshalAs(global::System.Runtime.InteropServices.UnmanagedType.LPArray)]float[] jarg2);
 
@@ -653,6 +650,12 @@ class MirisBindingsPINVOKE {
 
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_GetAttributeCount___")]
   public static extern int GetAttributeCount(global::System.IntPtr jarg1, int jarg2);
+
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_HasAttribute___")]
+  public static extern bool HasAttribute(global::System.IntPtr jarg1, int jarg2, string jarg3);
+
+  [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_GetAttribute___")]
+  public static extern int GetAttribute(global::System.IntPtr jarg1, int jarg2, string jarg3, ref global::Miris.Runtime.AttributeInfo jarg4);
 
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_AddStream___")]
   public static extern int AddStream(global::System.IntPtr jarg1, string jarg2, string jarg3, bool jarg4);

@@ -67,6 +67,20 @@ namespace Miris.Runtime
             return m_client.GetAttributeCount(m_sceneObjectId);
         }
 
+        public bool HasAttribute(String attributeName)
+        {
+            return m_client.HasAttribute(m_sceneObjectId, attributeName);
+        }
+
+        // Wraps a NativeArray around a C void* for direct access into unmanaged memory. 
+        // Use with caution!
+        unsafe public AttributeInfo GetAttribute(String attributeName)
+        {
+            AttributeInfo attributeInfo = new();
+            m_client.GetAttribute(m_sceneObjectId, attributeName, ref attributeInfo);
+            return attributeInfo;
+        }
+
         unsafe public Bounds GetLocalBoundingBox()
         {
             m_client.GetLocalBoundingBox(m_sceneObjectId, m_boundsData);

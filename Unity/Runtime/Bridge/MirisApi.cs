@@ -4,6 +4,8 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 
 // Unity packages
 using UnityEngine;
@@ -66,6 +68,44 @@ namespace Miris.Runtime
             if (versionPtr == IntPtr.Zero)
                 return string.Empty;
             return Marshal.PtrToStringAnsi(versionPtr);
+        }
+
+        // ---------------------------------------------------------------
+        // Renderer and editor entry points
+        //
+        // What remains after the client API moved to the SWIG-generated bindings in
+        // MirisBindings. These are kept hand-written because they are not part of the
+        // client surface: the render-event callback pointer and ECC LUT are consumed
+        // directly by the renderer, PlotMetric is profiling, and GetMosaicDescriptors
+        // reads through a pointer held in AttributeInfo.
+        // ---------------------------------------------------------------
+
+        [DllImport(AquaUnityPath)]
+        static public extern AquaStatus GetMosaicDescriptors(Int64 mosaicDescriptorPtr, MosaicDescriptorInfo[] mosaicDescriptor);
+
+        [DllImport(AquaUnityPath)]
+        static public extern IntPtr GetRenderEventCallbackPtr();
+
+        [DllImport(AquaUnityPath)]
+        static public extern void PlotMetric(string name, Int64 value);
+
+        [DllImport(AquaUnityPath)]
+        static public extern IntPtr GetEccLutData();
+
+        static public Texture2D GetEccLUT()
+        {
+            IntPtr data = MirisApi.GetEccLutData();
+            if (data.ToInt64() == 0)
+            {
+                // MirisApi.GetEccLutData can return 0ULL
+                // if that happens, return null before we attempt a bad SetPixelData call
+                return null;
+            }
+            NativeArray<byte> nativeArray = DataFormatUtils.WrapVoidPtrWithNativeArray(data, 256 * 256);
+            Texture2D lut = new Texture2D(256, 256, TextureFormat.R8, false, true);
+            lut.SetPixelData<byte>(nativeArray, mipLevel: 0);
+            lut.Apply(updateMipmaps: false, makeNoLongerReadable: true);
+            return lut;
         }
     }
 }

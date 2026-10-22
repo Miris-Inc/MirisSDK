@@ -44,11 +44,6 @@ namespace Miris.Runtime
             return m_client.GetStreamFetchMode(streamObject.GetId());
         }
 
-        public StreamStatus GetStreamStatus(SceneObject streamObject)
-        {
-            return m_client.GetStreamStatus(streamObject.GetId());
-        }
-
         public SceneObject GetRootObject()
         {
             int sceneRootId = m_client.GetSceneRootObjectId();
