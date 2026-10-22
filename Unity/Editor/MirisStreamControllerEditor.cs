@@ -59,11 +59,20 @@ namespace Miris.Editor
 
         static MirisStreamAssetBrowserDropHandler()
         {
+#if UNITY_6000_3_OR_NEWER
+            DragAndDrop.AddDropHandlerV2(OnHierarchyDrop);
+            DragAndDrop.AddDropHandlerV2(OnSceneDrop);
+#else
             DragAndDrop.AddDropHandler(OnHierarchyDrop);
             DragAndDrop.AddDropHandler(OnSceneDrop);
+#endif
         }
 
+#if UNITY_6000_3_OR_NEWER
+        private static DragAndDropVisualMode OnHierarchyDrop(EntityId dropTargetEntityId, HierarchyDropFlags dropMode, Transform parentForDraggedObjects, bool perform)
+#else
         private static DragAndDropVisualMode OnHierarchyDrop(int dropTargetInstanceID, HierarchyDropFlags dropMode, Transform parentForDraggedObjects, bool perform)
+#endif
         {
             if (!TryGetPayload(out MirisStreamDragPayload payload))
             {
