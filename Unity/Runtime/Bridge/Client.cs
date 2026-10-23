@@ -168,11 +168,6 @@ namespace Miris.Runtime
             return MirisBindings.GetStreamFetchMode(m_handle, streamObjectId);
         }
 
-        public StreamStatus GetStreamStatus(int streamObjectId)
-        {
-            return MirisBindings.GetStreamStatus(m_handle, streamObjectId);
-        }
-
         /// <summary>
         /// Selects the shark-family encoding profiles, which only the native Shark renderer reads.
         /// </summary>
@@ -303,6 +298,16 @@ namespace Miris.Runtime
         public int GetAttributeCount(int sceneObjectId)
         {
             return MirisBindings.GetAttributeCount(m_handle, sceneObjectId);
+        }
+
+        public bool HasAttribute(int sceneObjectId, string attributeName)
+        {
+            return MirisBindings.HasAttribute(m_handle, sceneObjectId, attributeName);
+        }
+
+        public void GetAttribute(int sceneObjectId, string attributeName, ref AttributeInfo attributeInfo)
+        {
+            MirisBindings.GetAttribute(m_handle, sceneObjectId, attributeName, ref attributeInfo);
         }
 
         public void GetTransform(int sceneObjectId, float[] transformData)
