@@ -541,7 +541,7 @@ class MirisBindingsPINVOKE {
   public static extern int DestroyAquaContext(global::System.IntPtr jarg1);
 
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_BeginFrame___")]
-  public static extern int BeginFrame(global::System.IntPtr jarg1, double jarg2);
+  public static extern int BeginFrame(global::System.IntPtr jarg1, double jarg2, int jarg3, int jarg4);
 
   [global::System.Runtime.InteropServices.DllImport(MirisApi.AquaUnityPath, EntryPoint="CSharp_MirisfRuntime_CreateClientForContext___")]
   public static extern global::System.IntPtr CreateClientForContext(global::System.IntPtr jarg1);
