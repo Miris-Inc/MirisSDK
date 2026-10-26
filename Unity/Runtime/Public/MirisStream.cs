@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace Miris.Runtime
 {
@@ -16,8 +15,8 @@ namespace Miris.Runtime
     [ExecuteInEditMode]
     public class MirisStream : MonoBehaviour
     {
-        [SerializeField, Tooltip("Non-optional. The MirisStreamController governing this object.")]
-        public MirisStreamController m_streamController;
+        [NonSerialized]
+        internal MirisStreamController m_streamController;
 
         [Tooltip("The ID of the asset to be streamed.")]
         public string m_assetId = "";
@@ -226,9 +225,9 @@ namespace Miris.Runtime
         #region MonoBehaviour
         protected async void OnEnable()
         {
-            if (m_streamController != null && m_streamController.isActiveAndEnabled)
+            RegisterController();
+            if (m_streamController != null)
             {
-                // Only run this after MirisStreamController.OnEnable() has been called
                 await LoadStream();
             }
         }
@@ -237,12 +236,11 @@ namespace Miris.Runtime
         {
             ClearRenderResources();
 
-            if (m_streamController != null && m_streamController.isActiveAndEnabled)
+            if (m_streamController != null && m_streamController == MirisStreamController.Current)
             {
-                // Prevent this from being run if MirisStreamController.OnDisable() has been already called.
                 UnloadStream();
-                DeregisterController();
             }
+            DeregisterController();
         }
 
         protected async void Update()
@@ -449,28 +447,16 @@ namespace Miris.Runtime
         }
 
         /// <summary>
-        /// Finds a MirisStreamController to register with.
+        /// Registers with the running MirisStreamController, starting one if needed.
         /// </summary>
-        /// <exception cref="UnityException"></exception>
         private void RegisterController()
         {
-            if (m_streamController == null)
+            if (m_streamController != null && m_streamController == MirisStreamController.Current)
             {
-                // TODO: We should remove the FindObjectsByType invocation if we can, it's pretty expensive.
-                MirisStreamController[] streamControllers = FindObjectsByType<MirisStreamController>(FindObjectsSortMode.None);
-                if (streamControllers.Length == 1)
-                {
-                    m_streamController = streamControllers[0];
-                }
-                else if (streamControllers.Length == 0)
-                {
-                    throw new UnityException($"Unable to find a {nameof(MirisStreamController)}, please create one in scene '{SceneManager.GetActiveScene().name}'.");
-                }
-                else
-                {
-                    throw new UnityException($"Found {streamControllers.Length} {nameof(MirisStreamController)}s, please only have one in your scene.");
-                }
+                return;
             }
+
+            m_streamController = MirisStreamController.Instance;
         }
 
         /// <summary>
@@ -478,11 +464,6 @@ namespace Miris.Runtime
         /// </summary>
         private void DeregisterController()
         {
-            if (m_streamController == null)
-            {
-                return;
-            }
-
             m_streamController = null;
         }
 
