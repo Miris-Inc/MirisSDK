@@ -29,7 +29,7 @@ namespace Miris.Editor
         private static readonly string WelcomeMessage =
             "Miris Unity SDK is currently in beta.";
         private static readonly string AssetKeyMessage =
-            "If you have an Asset Viewer Key for use with this project (or need to replace your old one), please paste it below, and click \"Apply\"";
+            "If you have an Asset Viewer Key for use with this project (or need to replace your old one), set it in Miris > Settings.";
 
         private bool m_doNotShowAgain;
         private bool m_doNotAutoDownloadBinaries;
@@ -50,9 +50,8 @@ namespace Miris.Editor
         private AddRequest m_addRequest;
 
         private ClientConfig m_clientConfig;
-        private string m_assetViewerKey = "";
 
-        [MenuItem("Tools/Miris/Show Startup Window", false, -20)]
+        [MenuItem("Miris/Show Startup Window", false, 0)]
         static void Init()
         {
             EditorWindow.GetWindow<StartupWindow>("Miris SDK").Show();
@@ -315,12 +314,13 @@ namespace Miris.Editor
 
             #if !MIRIS_INTERNAL
             GUILayout.BeginHorizontal();
-            m_assetViewerKey = EditorGUILayout.TextField("", m_assetViewerKey);
-            if (GUILayout.Button("Apply"))
+            using (new EditorGUI.DisabledScope(true))
             {
-                ClientConfig config = ClientConfig.Load();
-                config.asset_viewer_key = m_assetViewerKey;
-                ClientConfig.Write(config);
+                EditorGUILayout.TextField("", MirisSettings.Load().ViewerKey);
+            }
+            if (GUILayout.Button("Open Miris Settings"))
+            {
+                MirisSettingsWindow.Open();
             }
             GUILayout.EndHorizontal();
             #else
