@@ -9,19 +9,84 @@ using System.IO;
 // Unity engine
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.LowLevel;
+using UnityEngine.PlayerLoop;
 
 // Unity packages
 using Unity.Profiling;
+
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace Miris.Runtime
 {
     /// <summary>
     /// MirisStreamController streams an Scene into the Unity scene graph.
     /// Content will be populated under each of the Miris Streams.
+    ///
+    /// Created on first use of <see cref="Instance"/> and ticked from the PlayerLoop after
+    /// LateUpdate. Edit mode and Play mode each get their own.
     /// </summary>
-    [ExecuteInEditMode]
-    public class MirisStreamController : MonoBehaviour
+    public sealed class MirisStreamController
     {
+        private static MirisStreamController s_instance;
+
+        private static bool s_shuttingDown;
+
+        // Set when Start throws, so later accesses don't retry it every frame (and, with the native
+        // library missing, reopen its modal dialog). Cleared on entering or leaving play mode.
+        private static bool s_startFailed;
+
+        /// <summary>
+        /// The controller, created on first access. Null while the application is quitting or
+        /// leaving play mode, and after the controller failed to start: the access that started it
+        /// throws, and later ones return null.
+        /// </summary>
+        public static MirisStreamController Instance
+        {
+            get
+            {
+                if (s_instance == null && !s_shuttingDown && !s_startFailed)
+                {
+                    s_instance = new MirisStreamController();
+                    try
+                    {
+                        s_instance.Start();
+                    }
+                    catch
+                    {
+                        // Otherwise every later access returns the half-started controller.
+                        Shutdown();
+                        s_startFailed = true;
+                        throw;
+                    }
+                }
+
+                return s_instance;
+            }
+        }
+
+        public static MirisStreamController Current => s_instance;
+
+        public static bool TryGetActive(out MirisStreamController controller)
+        {
+            controller = s_instance;
+            return controller != null && controller.IsActive();
+        }
+
+        internal static void Shutdown()
+        {
+            if (s_instance == null)
+            {
+                return;
+            }
+
+            MirisStreamController instance = s_instance;
+            s_instance = null;
+            instance.Stop();
+        }
+
         [NonSerialized]
         public bool m_loadedMetadata = false;
 
@@ -84,11 +149,11 @@ namespace Miris.Runtime
 
         private bool m_warnedNoMainCamera = false;
 
-
         internal ClientConfig m_clientConfig;
 
-        [SerializeField]
-        [Tooltip("Asset viewer key used by the AssetManager. Use SetViewerKey() to change it at runtime; an empty/whitespace value falls back to the key configured in ClientConfig.")]
+        // Set by SetViewerKey, and wins over the scene's and project's keys until cleared.
+        private string m_runtimeViewerKey;
+
         private string m_viewerKey = "";
 
         /// <summary>
@@ -100,24 +165,17 @@ namespace Miris.Runtime
         // Why Shark cannot draw this controller's splats, or null when it can. Set by Initialize.
         private string m_sharkUnavailableReason;
 
-        // Latched by a failed bring-up so the restart that follows does not retry it; cleared on
-        // OnEnable.
+        // Latched by a failed bring-up so the restart that follows does not retry it. The next
+        // controller - on entering or leaving play mode - tries again.
         private bool m_sharkFailed;
 
-        /// <summary>
-        /// The lowest <see cref="NativeRenderScale"/> accepted.
-        /// </summary>
+        private bool m_pendingNativeRestart = false;
+
         public const float MinNativeRenderScale = 0.5f;
 
-        [SerializeField]
-        [Range(MinNativeRenderScale, 1.0f)]
-        [Tooltip("The fraction of the display resolution splats render at, "
-                 + "MetalFX-upscaled to full size. 1 renders at full size with no upscale. Where "
-                 + "MetalFX is unavailable, the smaller render is presented directly instead of "
-                 + "being upscaled.")]
         private float m_nativeRenderScale = 1.0f;
 
-        // Requested by SetNativeRenderScale, carried out in LateUpdate.
+        // Requested by SetNativeRenderScale, carried out on the next Tick.
         private float? m_pendingNativeRenderScale;
 
         /// <summary>
@@ -126,39 +184,29 @@ namespace Miris.Runtime
         /// </summary>
         public float NativeRenderScale => m_nativeRenderScale;
 
-        [SerializeField]
-        [Tooltip("Whether NativeRenderScale below 1 targets device resolution via "
-                 + "MetalFX, versus presenting the smaller render directly. Not runtime toggleable - "
-                 + "takes effect at renderer creation.")]
         private bool m_deviceResolutionViaMetalFx = false;
 
         /// <summary>
         /// Whether <see cref="NativeRenderScale"/> below 1 targets device resolution via MetalFX,
-        /// versus presenting the smaller render directly. Not runtime toggleable.
+        /// versus presenting the smaller render directly. Read at native renderer creation, so a
+        /// running native renderer restarts to pick up a change.
         /// </summary>
         public bool DeviceResolutionViaMetalFx => m_deviceResolutionViaMetalFx;
 
-        [SerializeField]
-        [Range(1.0f, 1.3f)]
-        [Tooltip("Widens the frustum Shark renders beyond the display's, so the "
-                 + "per-frame reprojection warp has real pixels at the edges on a missed vsync instead "
-                 + "of fading to black. 1 disables it. Not runtime toggleable - takes effect at "
-                 + "renderer creation.")]
+        public const float MaxReprojectionOverscan = 1.3f;
+
         private float m_reprojectionOverscan = 1.0f;
 
         /// <summary>
         /// How much wider than the display's frustum Shark renders, to
-        /// give the reprojection warp real edge pixels on a missed vsync. 1 disables it. Not runtime
-        /// toggleable.
+        /// give the reprojection warp real edge pixels on a missed vsync. 1 disables it. Read at
+        /// native renderer creation, so a running native renderer restarts to pick up a change.
         /// </summary>
         public float ReprojectionOverscan => m_reprojectionOverscan;
 
         // Whether Shark draws this controller's splats. Where it cannot, nothing does.
         internal bool IsSharkActive => m_sharkUnavailableReason == null;
 
-        [SerializeField]
-        [Tooltip("Whether the surfel pass antialiases the splat disc's edge "
-                 + "at 4x. Runtime toggle restarts the renderer.")]
         private bool m_surfelMsaaEnabled = false;
 
         /// <summary>
@@ -167,9 +215,6 @@ namespace Miris.Runtime
         /// </summary>
         public bool SurfelMsaaEnabled => m_surfelMsaaEnabled;
 
-        [SerializeField, Range(0.0f, 1.0f)]
-        [Tooltip("Fades everything this controller draws as one finished image: 1 is opaque, 0 is "
-                 + "invisible. Streams keep streaming at any value.")]
         private float m_outputOpacity = 1.0f;
 
         /// <summary>
@@ -184,16 +229,9 @@ namespace Miris.Runtime
             set => m_outputOpacity = Mathf.Clamp01(value);
         }
 
-        // The value the currently-running native renderer was created with
-        private bool m_appliedSurfelMsaaEnabled = false;
-
-        // Requested by SetSurfelMsaaEnabled, carried out in LateUpdate.
+        // Requested by SetSurfelMsaaEnabled, carried out on the next Tick.
         private bool? m_pendingSurfelMsaaEnabled;
 
-        [SerializeField]
-        [Tooltip("Whether textured gaussians render on pixels no surfel covers. "
-                 + "Fills holes in large scenes but leaves a dark fringe around objects floating in "
-                 + "space. Runtime toggleable.")]
         private bool m_surfelLessTextureSplatsEnabled = false;
 
         /// <summary>
@@ -203,10 +241,8 @@ namespace Miris.Runtime
         public bool SurfelLessTextureSplatsEnabled => m_surfelLessTextureSplatsEnabled;
 
         /// <summary>
-        /// Raised whenever the effective viewer key changes (Initialize(), SetViewerKey(), or an
-        /// Inspector edit via OnValidate). Lets other packages (e.g. app_kit) observe and react —
-        /// e.g. to keep dev UI or persisted preferences in sync — without MirisStreamController
-        /// needing to know they exist.
+        /// Raised whenever the effective viewer key changes, so other packages (e.g. app_kit) can
+        /// keep dev UI or saved preferences in sync.
         /// </summary>
         public event Action<string> ViewerKeyChanged;
 
@@ -220,11 +256,18 @@ namespace Miris.Runtime
         public event Action<SceneChangeTracker.Changes> SceneChangesDrained;
 
         /// <summary>
-        /// Raised when the controller has built a new streaming client: on enable, and again each
-        /// time the renderer restarts, which replaces the client. Raised before any stream loads,
-        /// so client-side state such as the server ENV can be re-applied to the new client.
+        /// Raised each time a controller brings a client up - on creation, and again whenever a
+        /// renderer restart rebuilds it. Handlers run before any MirisStream can register with that
+        /// client, so this is where client-wide configuration (e.g. the server ENV) belongs.
         /// </summary>
-        public event Action ClientInitialized;
+        public static event Action<MirisStreamController> ClientStarted;
+
+        /// <summary>
+        /// Raised as a controller starts, before its client is created, so values the native
+        /// renderer reads only at creation - its resolution, overscan, MetalFX - can be set with no
+        /// restart.
+        /// </summary>
+        public static event Action<MirisStreamController> Starting;
 
         public List<Action> m_onMetadataLoadedActions = new List<Action>();
 
@@ -258,7 +301,7 @@ namespace Miris.Runtime
         /// <summary>
         /// Sets <see cref="NativeRenderScale"/>, clamped to [<see cref="MinNativeRenderScale"/>, 1].
         /// The native renderer's resolution is fixed once it is up, so on a controller already
-        /// rendering natively this restarts it on the next LateUpdate and re-streams every loaded
+        /// rendering natively this restarts it on the next Tick and re-streams every loaded
         /// asset.
         /// </summary>
         public void SetNativeRenderScale(float scale)
@@ -295,7 +338,6 @@ namespace Miris.Runtime
             if (m_client == null || !IsSharkActive)
             {
                 m_surfelMsaaEnabled = enabled;
-                m_appliedSurfelMsaaEnabled = enabled;
                 return;
             }
 
@@ -311,6 +353,33 @@ namespace Miris.Runtime
             m_surfelLessTextureSplatsEnabled = enabled;
         }
 
+        /// <summary>
+        /// Sets <see cref="DeviceResolutionViaMetalFx"/>, restarting a running native renderer on
+        /// the next Tick.
+        /// </summary>
+        public void SetDeviceResolutionViaMetalFx(bool enabled)
+        {
+            if (enabled != m_deviceResolutionViaMetalFx)
+            {
+                m_deviceResolutionViaMetalFx = enabled;
+                m_pendingNativeRestart |= m_client != null && IsSharkActive;
+            }
+        }
+
+        /// <summary>
+        /// Sets <see cref="ReprojectionOverscan"/>, clamped to [1, <see cref="MaxReprojectionOverscan"/>],
+        /// restarting a running native renderer on the next Tick.
+        /// </summary>
+        public void SetReprojectionOverscan(float overscan)
+        {
+            overscan = Mathf.Clamp(overscan, 1.0f, MaxReprojectionOverscan);
+            if (!Mathf.Approximately(overscan, m_reprojectionOverscan))
+            {
+                m_reprojectionOverscan = overscan;
+                m_pendingNativeRestart |= m_client != null && IsSharkActive;
+            }
+        }
+
         private void ApplyPendingSurfelMsaaEnabled()
         {
             if (m_pendingSurfelMsaaEnabled == null)
@@ -319,7 +388,6 @@ namespace Miris.Runtime
             }
 
             m_surfelMsaaEnabled = m_pendingSurfelMsaaEnabled.Value;
-            m_appliedSurfelMsaaEnabled = m_surfelMsaaEnabled;
             m_pendingSurfelMsaaEnabled = null;
             if (IsSharkActive)
             {
@@ -508,8 +576,7 @@ namespace Miris.Runtime
 
         public bool IsActive()
         {
-            // Unfortunately we cannot rely on soely .isActiveAndEnabled :\
-            return isActiveAndEnabled && m_client != null;
+            return m_client != null;
         }
 
         // --------------------------------------------------------------------
@@ -801,9 +868,8 @@ namespace Miris.Runtime
             // Initialize client config.
             m_clientConfig = ClientConfig.Load();
 
-            // Seed with precedence: an existing value already on this component (e.g. saved into
-            // the scene/prefab via the Inspector) wins; otherwise fall back to ClientConfig's default.
-            SetViewerKey(m_viewerKey);
+            m_viewerKey = ResolveViewerKey();
+            ApplyViewerKey();
 
             PreparePersistentDataDir(m_client);
 
@@ -817,9 +883,7 @@ namespace Miris.Runtime
             // Before any MirisStream loads - the profile is fixed per asset at load.
             Client.SetPreferSharkEncodingProfiles(true);
 
-            m_appliedSurfelMsaaEnabled = m_surfelMsaaEnabled;
-
-            ClientInitialized?.Invoke();
+            ClientStarted?.Invoke(this);
         }
 
         // IsSupported and the pipeline before Activate, which only reserves Shark's single context and
@@ -830,13 +894,14 @@ namespace Miris.Runtime
             {
                 return "this platform has no native splat renderer (Shark runs on Apple platforms only)";
             }
-            if (GraphicsSettings.currentRenderPipeline != null)
+            if (!SharkSplatRenderSystem.SupportsRenderPipeline(GraphicsSettings.currentRenderPipeline))
             {
-                return "Shark does not support scriptable render pipelines such as URP yet";
+                return "Shark supports the built-in render pipeline and URP only, not "
+                       + GraphicsSettings.currentRenderPipeline.GetType().Name;
             }
             if (m_sharkFailed)
             {
-                return "Shark could not be brought up; re-enable the controller to retry";
+                return "Shark could not be brought up; the next controller will retry";
             }
             if (!SharkSplatRenderSystem.m_instance.Activate(this))
             {
@@ -856,29 +921,32 @@ namespace Miris.Runtime
             ViewerKeyChanged?.Invoke(m_viewerKey);
         }
 
-        /// <summary>
-        /// Normalizes a requested viewer key: trims surrounding whitespace, and falls back to
-        /// whatever ClientConfig provides by default if the result is empty (e.g. null, "", or
-        /// whitespace-only). This is how a caller "clears" an override back to the default.
-        /// </summary>
-        private string NormalizeViewerKey(string viewerKey)
+        // The runtime key, else the active scene's, else the project's, else ClientConfig's.
+        private string ResolveViewerKey()
         {
-            string trimmed = viewerKey?.Trim();
-            if (!string.IsNullOrEmpty(trimmed))
+            if (!string.IsNullOrEmpty(m_runtimeViewerKey))
             {
-                return trimmed;
+                return m_runtimeViewerKey;
+            }
+
+            string settingsViewerKey = MirisSceneSettings.ResolveViewerKey()?.Trim();
+            if (!string.IsNullOrEmpty(settingsViewerKey))
+            {
+                return settingsViewerKey;
             }
 
             return m_clientConfig != null ? m_clientConfig.GetAssetViewerKey() : "";
         }
 
         /// <summary>
-        /// Changes the viewer key at runtime and pushes it to the AssetManager immediately. Pass
-        /// null, empty, or whitespace to reset back to the default key configured in ClientConfig.
+        /// Sets a viewer key that wins over the scene's and project's keys, and pushes it to the
+        /// AssetManager immediately. Pass null, empty, or whitespace to clear it, so the active
+        /// scene's key applies, else the project's, else the one configured in ClientConfig.
         /// </summary>
         public void SetViewerKey(string viewerKey)
         {
-            m_viewerKey = NormalizeViewerKey(viewerKey);
+            m_runtimeViewerKey = viewerKey?.Trim();
+            m_viewerKey = ResolveViewerKey();
             ApplyViewerKey();
         }
 
@@ -928,42 +996,116 @@ namespace Miris.Runtime
         }
 
         // --------------------------------------------------------------------
-        // Unity event handling
+        // Settings
         // --------------------------------------------------------------------
 
-        protected void OnEnable()
+        private void OnSettingsChanged()
         {
-            m_sharkFailed = false;
-            Initialize();
-        }
-
-        protected void OnDisable()
-        {
-            Teardown();
-        }
-
-        protected void OnValidate()
-        {
-            // Normalize Inspector edits to m_viewerKey (trim, or fall back to ClientConfig's
-            // default if cleared) and push the result straight to the AssetManager, if it already
-            // exists (e.g. edits made in edit mode or while in Play mode).
-            m_viewerKey = NormalizeViewerKey(m_viewerKey);
-            ApplyViewerKey();
-
-            // An Inspector edit during Play mode would otherwise leave the running native renderer
-            // at whatever sample count it was created with.
-            if (m_surfelMsaaEnabled != m_appliedSurfelMsaaEnabled)
+            string viewerKey = ResolveViewerKey();
+            if (viewerKey != m_viewerKey)
             {
-                bool requested = m_surfelMsaaEnabled;
-                m_surfelMsaaEnabled = m_appliedSurfelMsaaEnabled;
-                SetSurfelMsaaEnabled(requested);
+                m_viewerKey = viewerKey;
+                ApplyViewerKey();
             }
         }
 
-        protected void Start()
+        // The controller outlives scenes, so a fade one scene left part-way would carry over.
+        private void OnActiveSceneChanged()
         {
-            // Initialize client & scene state
-            SyncStreamingCamera();
+            m_outputOpacity = 1.0f;
+            OnSettingsChanged();
+        }
+
+        // --------------------------------------------------------------------
+        // Lifetime and ticking
+        // --------------------------------------------------------------------
+
+        private void Start()
+        {
+            Starting?.Invoke(this);
+            Initialize();
+
+            MirisSettings.Changed += OnSettingsChanged;
+            MirisSceneAsset.Changed += OnSettingsChanged;
+            MirisSceneAsset.ActiveSceneChanged += OnActiveSceneChanged;
+            InsertIntoPlayerLoop();
+        }
+
+        private void Stop()
+        {
+            RemoveFromPlayerLoop();
+            MirisSceneAsset.ActiveSceneChanged -= OnActiveSceneChanged;
+            MirisSceneAsset.Changed -= OnSettingsChanged;
+            MirisSettings.Changed -= OnSettingsChanged;
+
+            Teardown();
+        }
+
+        // Marks this controller's entry in the PlayerLoop.
+        private struct MirisStreamControllerUpdate { }
+
+        // Right after ScriptRunBehaviourLateUpdate, so camera rigs have moved before the camera and
+        // stream transforms sync. Edit mode ticks only when the editor runs the PlayerLoop.
+        private static void InsertIntoPlayerLoop()
+        {
+            EditPreLateUpdate(systems =>
+            {
+                if (systems.Any(system => system.type == typeof(MirisStreamControllerUpdate)))
+                {
+                    return;
+                }
+
+                int lateUpdateIndex = systems.FindIndex(
+                    system => system.type == typeof(PreLateUpdate.ScriptRunBehaviourLateUpdate));
+                systems.Insert(lateUpdateIndex + 1, new PlayerLoopSystem
+                {
+                    type = typeof(MirisStreamControllerUpdate),
+                    updateDelegate = OnPlayerLoopUpdate,
+                });
+            });
+        }
+
+        // Also before a domain reload: the PlayerLoop would otherwise keep calling a delegate into
+        // the unloaded domain.
+        private static void RemoveFromPlayerLoop()
+        {
+            EditPreLateUpdate(
+                systems => systems.RemoveAll(system => system.type == typeof(MirisStreamControllerUpdate)));
+        }
+
+        private static void EditPreLateUpdate(Action<List<PlayerLoopSystem>> edit)
+        {
+            PlayerLoopSystem root = PlayerLoop.GetCurrentPlayerLoop();
+            int phaseIndex = Array.FindIndex(root.subSystemList, phase => phase.type == typeof(PreLateUpdate));
+            if (phaseIndex < 0)
+            {
+                return;
+            }
+
+            List<PlayerLoopSystem> systems = root.subSystemList[phaseIndex].subSystemList.ToList();
+            edit(systems);
+            root.subSystemList[phaseIndex].subSystemList = systems.ToArray();
+            PlayerLoop.SetPlayerLoop(root);
+        }
+
+        private static void OnPlayerLoopUpdate()
+        {
+            s_instance?.Tick();
+        }
+
+        private void Tick()
+        {
+            if (m_client == null)
+            {
+                return;
+            }
+
+            ApplyPendingNativeRestart();
+            ApplyPendingNativeRenderScale();
+            ApplyPendingSurfelMsaaEnabled();
+            TickRenderBackend();
+            SyncClientParameters();
+            SyncScene();
         }
 
         // Hands the client the camera it chooses detail and budget for. Without one, which in edit
@@ -1006,14 +1148,67 @@ namespace Miris.Runtime
             return mainCamera;
         }
 
-        protected void LateUpdate()
+        // Before the other pending changes, any of which restarts anyway and would pick these up.
+        private void ApplyPendingNativeRestart()
         {
-            ApplyPendingNativeRenderScale();
-            ApplyPendingSurfelMsaaEnabled();
-            TickRenderBackend();
-            SyncClientParameters();
-            SyncScene();
+            if (!m_pendingNativeRestart)
+            {
+                return;
+            }
+
+            m_pendingNativeRestart = false;
+            if (IsSharkActive && m_pendingNativeRenderScale == null && m_pendingSurfelMsaaEnabled == null)
+            {
+                RestartRenderer();
+            }
         }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void OnSubsystemRegistration()
+        {
+            Shutdown();
+
+            // Covers entering play mode with domain reload disabled, where statics carry over.
+            s_shuttingDown = false;
+            s_startFailed = false;
+            Application.quitting -= OnApplicationQuitting;
+            Application.quitting += OnApplicationQuitting;
+        }
+
+        private static void OnApplicationQuitting()
+        {
+            s_shuttingDown = true;
+            Shutdown();
+        }
+
+#if UNITY_EDITOR
+        [InitializeOnLoadMethod]
+        private static void RegisterEditorLifetime()
+        {
+            AssemblyReloadEvents.beforeAssemblyReload += Shutdown;
+            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+        }
+
+        // Edit mode and play mode each get their own controller, so a play session starts from a
+        // fresh client and Shark context rather than inheriting the editor's.
+        private static void OnPlayModeStateChanged(PlayModeStateChange change)
+        {
+            switch (change)
+            {
+                case PlayModeStateChange.ExitingEditMode:
+                    Shutdown();
+                    break;
+                case PlayModeStateChange.ExitingPlayMode:
+                    s_shuttingDown = true;
+                    Shutdown();
+                    break;
+                case PlayModeStateChange.EnteredEditMode:
+                    s_shuttingDown = false;
+                    s_startFailed = false;
+                    break;
+            }
+        }
+#endif
 
         // Shark cannot come up until the camera and, in XR, the compositor's drawable exist, so it
         // is brought up here rather than in Initialize.
