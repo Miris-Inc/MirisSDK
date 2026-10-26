@@ -17,7 +17,7 @@ namespace Miris.Editor.Tools
     /// </summary>
     public static class MenuItems
     {
-        private const string XR_SIM_MENU_PATH = "Tools/Miris/Toggle XR Simulation";
+        private const string XR_SIM_MENU_PATH = "Miris/Toggle XR Simulation";
         
         /// <summary>
         /// Auto-configure XR Simulation based on CI/batch mode detection
@@ -60,7 +60,7 @@ namespace Miris.Editor.Tools
         /// Toggle XR Simulation on/off for desktop vs VR development
         /// Useful for switching between desktop dev mode and VR testing mode
         /// </summary>
-        [MenuItem(XR_SIM_MENU_PATH)]
+        [MenuItem(XR_SIM_MENU_PATH, false, 2)]
         public static void ToggleXRSimulation()
         {
             bool currentState = IsXRSimulationEnabled();
