@@ -14,7 +14,8 @@ namespace Miris.Runtime {
 
 public enum StreamFetchMode {
   Regular,
-  Prefetch
+  Prefetch,
+  Parked
 }
 
 }
