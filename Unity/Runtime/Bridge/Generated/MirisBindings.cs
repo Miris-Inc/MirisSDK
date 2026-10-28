@@ -28,8 +28,8 @@ public class MirisBindings {
     return ret;
   }
 
-  public static AquaStatus BeginFrame(global::System.IntPtr context, double previousFrameTimeMs) {
-    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.BeginFrame(context, previousFrameTimeMs);
+  public static AquaStatus BeginFrame(global::System.IntPtr context, double previousFrameTimeMs, int primsResident, int primCapacity) {
+    AquaStatus ret = (AquaStatus)MirisBindingsPINVOKE.BeginFrame(context, previousFrameTimeMs, primsResident, primCapacity);
     return ret;
   }
 
