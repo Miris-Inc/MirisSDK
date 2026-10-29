@@ -15,8 +15,8 @@ using Miris.Runtime;
 namespace Miris.Editor
 {
     /// <summary>
-    /// Standalone Asset Browser, opened from MirisStreamControllerEditor's "Browse Assets…"
-    /// button. Same Refresh/Prev/Next pagination as the inline foldout, just in its own window.
+    /// Standalone Asset Browser, opened from Miris > Asset Browser or the Miris > Settings window,
+    /// with Refresh/Prev/Next pagination.
     ///
     /// A SearchProvider-based version was tried first and dropped: no per-instance state, and no
     /// way to hook "user scrolled near the bottom." A plain EditorWindow gives us both.
@@ -95,7 +95,6 @@ namespace Miris.Editor
             }
         }
 
-        [SerializeField]
         private MirisStreamController m_controller;
 
         // The controller is only this window's source of truth for the viewer key -- page size
@@ -124,19 +123,19 @@ namespace Miris.Editor
 
         private Vector2 m_scrollPosition;
 
-        /// <summary>Opens the window, scoped to the given controller.</summary>
         // ProjectBrowser is internal to UnityEditor, so it's resolved by name instead of
         // typeof(). Falls back to null (no dock preference) if a future Unity version renames it.
         private static readonly Type s_projectBrowserType = Type.GetType("UnityEditor.ProjectBrowser,UnityEditor");
 
-        public static void Open(MirisStreamController controller)
+        [MenuItem("Miris/Asset Browser", false, 21)]
+        public static void Open()
         {
             // Dock preference only applies the first time this window is created.
             MirisAssetBrowserWindow window = s_projectBrowserType != null
                 ? GetWindow<MirisAssetBrowserWindow>("Miris Assets", s_projectBrowserType)
                 : GetWindow<MirisAssetBrowserWindow>("Miris Assets");
             window.minSize = new Vector2(280, 360);
-            window.SetController(controller);
+            window.SetController(MirisStreamController.Instance);
             window.Show();
         }
 
@@ -145,10 +144,9 @@ namespace Miris.Editor
             m_tileWidth = EditorPrefs.GetFloat(TileWidthPrefKey, m_tileWidth);
             m_pageSize = EditorPrefs.GetInt(PageSizePrefKey, m_pageSize);
 
-            // Also runs after a domain reload. m_controller (now [SerializeField]) survives, but
-            // m_assets doesn't (AssetInfo isn't serializable), so ResetAndLoad() refetches -- and
-            // falls back to a scene search if m_controller didn't survive either.
-            ResetAndLoad();
+            // Also runs after a domain reload, which m_assets doesn't survive (AssetInfo isn't
+            // serializable), so this refetches.
+            SetController(MirisStreamController.Current);
         }
 
         private void SetController(MirisStreamController controller)
@@ -274,34 +272,29 @@ namespace Miris.Editor
 
         private async Task LoadPageAsync(string cursor, PageDirection direction, int pendingPageNumber)
         {
-            if (m_controller == null)
+            // SetController() resets and refetches on its own, so hand off to it and let this
+            // call be superseded rather than also fetching here.
+            MirisStreamController controller = MirisStreamController.Current;
+            if (controller != m_controller)
             {
-                // Falls back to whatever's in the scene (e.g. after a domain reload wipes the
-                // reference) instead of just failing. SetController() resets and refetches on
-                // its own, so hand off to it and let this call be superseded rather than also
-                // fetching here.
-                MirisStreamController found = UnityEngine.Object.FindFirstObjectByType<MirisStreamController>();
-                if (found != null)
-                {
-                    SetController(found);
-                    return;
-                }
+                SetController(controller);
+                return;
             }
 
             if (m_controller == null)
             {
-                m_lastError = "No MirisStreamController selected.";
+                m_lastError = "Miris is not running.";
                 return;
             }
 
             // Fetched fresh every call rather than cached: the controller disposes and recreates
-            // its AssetManager/Client on every Teardown/Initialize (e.g. a disable/enable cycle),
+            // its AssetManager/Client on every Teardown/Initialize (e.g. a renderer restart),
             // so a cached reference here would silently go stale and call into a disposed native
             // handle.
-            AssetManager assetManager = m_controller.isActiveAndEnabled ? m_controller.GetAssetManager() : null;
+            AssetManager assetManager = m_controller.IsActive() ? m_controller.GetAssetManager() : null;
             if (assetManager == null)
             {
-                m_lastError = $"{nameof(MirisStreamController)} on the browsed GameObject must be enabled before assets can be listed.";
+                m_lastError = $"{nameof(MirisStreamController)} has no client running, so assets cannot be listed.";
                 return;
             }
 
@@ -354,12 +347,17 @@ namespace Miris.Editor
 
         private void OnGUI()
         {
+            if (m_controller != MirisStreamController.Current)
+            {
+                SetController(MirisStreamController.Current);
+            }
+
             if (m_controller == null)
             {
-                EditorGUILayout.HelpBox("No MirisStreamController selected. Reopen this window from its Inspector's \"Browse Assets…\" button, or retry to search the scene again.", MessageType.Warning);
-                if (GUILayout.Button("Retry", GUILayout.Height(20)))
+                EditorGUILayout.HelpBox("Miris is not running.", MessageType.Warning);
+                if (GUILayout.Button("Start", GUILayout.Height(20)))
                 {
-                    ResetAndLoad();
+                    SetController(MirisStreamController.Instance);
                 }
                 return;
             }
@@ -563,7 +561,6 @@ namespace Miris.Editor
             {
                 AssetId = info.m_uuid,
                 AssetName = info.m_name,
-                Controller = m_controller,
             };
         }
 
