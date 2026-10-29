@@ -33,7 +33,7 @@ For deployments targeting specific devices, the minimum system requirements are 
     ![](Unity/img/package_manager_1.png)
     * Use the "+" button to `Install git package from url...`
     ![](Unity/img/package_manager_2.png)
-    * Paste the following into the git URL field to download the latest SDK, then click the install button: `https://github.com/Miris-Inc/MirisSDK.git?path=Unity#latest`
+    * Paste the following into the git URL field to download the latest SDK, then click the install button: `https://github.com/Miris-Inc/miris-unity-sdk.git?path=Unity#latest`
     ![](Unity/img/package_manager_3.png)
 
 3. The Miris SDK will need to install the native libraries it uses into the `Assets/Plugins/Miris` folder. If this folder does not contain platform folders with libraries inside, you will need to download them via the in editor tool. 
@@ -81,6 +81,15 @@ For deployments targeting specific devices, the minimum system requirements are 
 `StreamStatus.Failed` is new: the stream could not be resolved or loaded.
 
 <!--MDX_STRIP-->
+## Support
+
+You're welcome to fork, clone and experiment with the SDK.
+
+- **Found a bug?** [Open an issue](https://github.com/Miris-Inc/miris-unity-sdk/issues).
+- **Anything else:** email [support@miris.com](mailto:support@miris.com).
+
+We don't accept pull requests.
+
 ### Notes
 
 * Miris employees should consult the centralized documentation, rather than this document.
