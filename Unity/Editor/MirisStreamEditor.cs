@@ -225,14 +225,9 @@ namespace Miris.Editor
                 return new Badge("Disabled", "Component is inactive. Render resources have been released.", s_idleColor);
             }
 
-            if (stream.m_streamController == null)
+            if (!MirisStreamController.TryGetActive(out _))
             {
-                return new Badge("No Controller", "Assign a Miris Stream Controller, or add one to the scene.", s_errorColor);
-            }
-
-            if (!stream.m_streamController.IsActive())
-            {
-                return new Badge("Controller Inactive", "Controller assigned, but its client is not running yet.", s_errorColor);
+                return new Badge("Controller Inactive", "The Miris controller's client is not running yet.", s_errorColor);
             }
 
             if (string.IsNullOrEmpty(stream.m_assetId))
