@@ -50,7 +50,7 @@ namespace Miris.Editor
         // Config for fetching repo
         private static readonly string artifactName = "UnitySDK";
         private static string owner = "miris-inc";
-        private static string repo = "MirisSDK";
+        private static string repo = "miris-unity-sdk";
         private static string tag = $"{artifactName}@v0.0.9";
         private static string githubToken = ""; // optional
         private static bool hideToken = true;
@@ -98,7 +98,7 @@ namespace Miris.Editor
         private static Release loadedRelease;
         private static Vector2 scroll;
 
-        [MenuItem("Tools/Miris/Platform Downloader")]
+        [MenuItem("Miris/Platform Downloader", false, 1)]
         public static void Open() => GetWindow<MirisReleaseDownloader>("Miris Platform Downloader");
         
 #if !MIRIS_INTERNAL
