@@ -44,5 +44,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 380ff696bbfbd4e79b17a3d5551ad737, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_streamController: {fileID: 0}
   m_opacity: 1

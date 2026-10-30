@@ -14,7 +14,7 @@ namespace Miris.Runtime
     //
     // Shark owns a single process-wide context, so there is one of these and one controller may
     // drive it at a time. The controller owns the lifecycle: Activate on initialize, Tick every
-    // LateUpdate, Deactivate on teardown.
+    // controller Tick, Deactivate on teardown.
     internal class SharkSplatRenderSystem
     {
         internal static readonly SharkSplatRenderSystem m_instance = new();
@@ -160,6 +160,20 @@ namespace Miris.Runtime
             }
         }
 
+        // The built-in pipeline (null) or URP. Matched by name because this assembly cannot reference
+        // URP, which is optional; SharkUniversalCompositePass is the URP side.
+        internal static bool SupportsRenderPipeline(RenderPipelineAsset pipeline)
+        {
+            for (Type type = pipeline?.GetType(); type != null; type = type.BaseType)
+            {
+                if (type.FullName == "UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset")
+                {
+                    return true;
+                }
+            }
+            return pipeline == null;
+        }
+
         // Whether native could not be brought up, so the controller can stop streaming for it.
         internal bool Failed => m_failed;
 
@@ -169,6 +183,13 @@ namespace Miris.Runtime
 
         // For tests - see SharkCameraViews.RenderCount.
         internal int CameraRenderCount(Camera camera) => m_cameraViews.RenderCount(camera);
+
+        // See SharkCameraViews.TryGetComposite.
+        internal bool TryGetCameraComposite(Camera camera, out Mesh mesh, out Material material,
+                                            out MaterialPropertyBlock properties)
+        {
+            return m_cameraViews.TryGetComposite(camera, out mesh, out material, out properties);
+        }
 
         // Mirrors MirisStreamController.SurfelMsaaEnabled 
         internal bool SurfelMsaaEnabled = false;
@@ -205,8 +226,8 @@ namespace Miris.Runtime
             }
             if (m_controller != null)
             {
-                Debug.LogError($"SharkSplatRenderSystem: already driving '{m_controller.name}' - Shark has "
-                               + $"one context, so '{controller.name}' cannot also use it");
+                Debug.LogError("SharkSplatRenderSystem: already driving another controller - Shark has "
+                               + "one context, so this one cannot also use it");
                 return false;
             }
 
@@ -217,8 +238,8 @@ namespace Miris.Runtime
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.update += PumpEditMode;
 #endif
-            Debug.Log($"SharkSplatRenderSystem: activated for '{controller.name}' - asset ids and server "
-                      + $"come from its MirisStreams (native renderer available: {IsSupported})");
+            Debug.Log("SharkSplatRenderSystem: activated - asset ids and server come from the "
+                      + $"controller's MirisStreams (native renderer available: {IsSupported})");
             return true;
         }
 
@@ -286,7 +307,7 @@ namespace Miris.Runtime
             return false;
         }
 
-        // Driven from MirisStreamController.LateUpdate. Brings native up once the render size is
+        // Driven from MirisStreamController.Tick. Brings native up once the render size is
         // known, then keeps the model transforms current.
         internal void Tick()
         {
@@ -493,12 +514,26 @@ namespace Miris.Runtime
             }
 
             // One plugin event per frame, not one per view: the native side renders every view in a
-            // single call so the depth sort is shared.
+            // single call so the depth sort is shared. Camera CommandBuffers only run in the built-in
+            // pipeline and endCameraRendering only fires in a scriptable one, so exactly one issues it.
             m_commandBuffer = new CommandBuffer { name = "SharkSplatRenderSystem" };
             m_commandBuffer.IssuePluginEvent(SplatRendererBridge.AquaSplatRenderer_GetRenderEventCallbackPtr(),
                                              SplatRendererBridge.FrameEventId);
             m_camera.AddCommandBuffer(CameraEvent.AfterEverything, m_commandBuffer);
+            RenderPipelineManager.endCameraRendering += OnEndCameraRendering;
             return true;
+        }
+
+        void OnEndCameraRendering(ScriptableRenderContext context, Camera camera)
+        {
+            if (camera != m_camera || m_commandBuffer == null)
+            {
+                return;
+            }
+            context.ExecuteCommandBuffer(m_commandBuffer);
+            // Submitted here so the event follows this camera's work rather than whichever camera
+            // the pipeline submits next.
+            context.Submit();
         }
 
         // The rest of TryInitialize for SharkCameraViews, which creates each camera's surfaces as
@@ -616,7 +651,7 @@ namespace Miris.Runtime
                 return;
             }
 
-            // The controller drains every LateUpdate whether or not the scene changed, so most
+            // The controller drains every Tick whether or not the scene changed, so most
             // batches are empty. Skipping those keeps a P/Invoke and a native lock off every frame,
             // and reserves the native "no context yet" warning for batches that really lose something.
             if (changes.m_changeIds.m_createdObjectsCount == 0
@@ -922,6 +957,7 @@ namespace Miris.Runtime
                 m_quadMaterial = null;
             }
 
+            RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
             if (m_commandBuffer != null && m_camera != null)
             {
                 m_camera.RemoveCommandBuffer(CameraEvent.AfterEverything, m_commandBuffer);
