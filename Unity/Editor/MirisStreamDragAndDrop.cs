@@ -20,31 +20,6 @@ namespace Miris.Editor
 
         public string AssetId;
         public string AssetName;
-        public MirisStreamController Controller;
-    }
-
-    /// <summary>
-    /// Default inspector for MirisStreamController, plus a "Browse Assets…" button that opens
-    /// the standalone MirisAssetBrowserWindow. Asset browsing itself lives entirely in that
-    /// window now -- this used to also host an inline browser foldout, but that's gone in favor
-    /// of one browsing experience instead of two.
-    /// </summary>
-    [CustomEditor(typeof(MirisStreamController))]
-    public class MirisStreamControllerEditor : UnityEditor.Editor
-    {
-        public override void OnInspectorGUI()
-        {
-            var controller = (MirisStreamController)target;
-
-            DrawDefaultInspector();
-
-            EditorGUILayout.Space();
-
-            if (GUILayout.Button("Browse Assets…", GUILayout.Height(20)))
-            {
-                MirisAssetBrowserWindow.Open(controller);
-            }
-        }
     }
 
     /// <summary>
@@ -59,11 +34,20 @@ namespace Miris.Editor
 
         static MirisStreamAssetBrowserDropHandler()
         {
+#if UNITY_6000_3_OR_NEWER
+            DragAndDrop.AddDropHandlerV2(OnHierarchyDrop);
+            DragAndDrop.AddDropHandlerV2(OnSceneDrop);
+#else
             DragAndDrop.AddDropHandler(OnHierarchyDrop);
             DragAndDrop.AddDropHandler(OnSceneDrop);
+#endif
         }
 
+#if UNITY_6000_3_OR_NEWER
+        private static DragAndDropVisualMode OnHierarchyDrop(EntityId dropTargetEntityId, HierarchyDropFlags dropMode, Transform parentForDraggedObjects, bool perform)
+#else
         private static DragAndDropVisualMode OnHierarchyDrop(int dropTargetInstanceID, HierarchyDropFlags dropMode, Transform parentForDraggedObjects, bool perform)
+#endif
         {
             if (!TryGetPayload(out MirisStreamDragPayload payload))
             {
@@ -121,13 +105,12 @@ namespace Miris.Editor
 
             instance.name = string.IsNullOrEmpty(payload.AssetName) ? prefab.name : payload.AssetName;
 
-            // The prefab's serialized defaults for these fields are stale (predates the m_url ->
-            // m_assetId refactor), so set them explicitly rather than trusting the prefab.
+            // The prefab's serialized default for this field is stale (predates the m_url ->
+            // m_assetId refactor), so set it explicitly rather than trusting the prefab.
             MirisStream stream = instance.GetComponent<MirisStream>();
             if (stream != null)
             {
                 stream.m_assetId = payload.AssetId;
-                stream.m_streamController = payload.Controller;
             }
 
             Undo.RegisterCreatedObjectUndo(instance, "Create Miris Stream");

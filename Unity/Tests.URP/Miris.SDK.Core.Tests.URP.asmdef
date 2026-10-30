@@ -1,0 +1,32 @@
+{
+    "name": "Miris.SDK.Core.Tests.URP",
+    "rootNamespace": "Miris.Tests",
+    "references": [
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "Miris.SDK.Core.Runtime",
+        "Miris.SDK.Core.Tests",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "MIRIS_ENABLE_URP"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.render-pipelines.universal",
+            "expression": "",
+            "define": "MIRIS_ENABLE_URP"
+        }
+    ],
+    "noEngineReferences": false
+}
